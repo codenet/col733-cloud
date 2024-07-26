@@ -46,15 +46,16 @@ same as two threads running on two different data centers!
 ## Speedup, efficiency, iso-efficiency, scalability
 Now with this simplification, we can start analyzing algorithms. Let us say we
 are adding N numbers on N processors. Serial time $T_s$ of doing this
-computation on a single processor is $O(N)$. To compute the same sum on N
+computation on a single processor is $\Theta(N)$. To compute the same sum on N
 processors, we can apply the following algorithm. In first round, processor
 $2i+1$ sends its data to processor $2i$ and processor $2i$ adds them up. In
 second round, processor $4i+2$ sends data to processor $4i$, and so on.
 
-This process completes in $O(logN)$ steps and in each step we are doing constant
-communication and constant computation so parallel time $T_p = O(logN)$. This
-gives us an overall speed up of $S = T_s / T_p = N/logN$. If $N$ is large, $S$
-is a big number! Looks like we have a good parallel algorithm! Or do we?
+This process completes in $\Theta(logN)$ steps and in each step we are doing
+constant communication and constant computation so parallel time $T_p =
+\Theta(logN)$. This gives us an overall speed up of $S = T_s / T_p =
+\Theta(N/logN)$. If $N$ is large, $S$ is a big number! Looks like we have a good
+parallel algorithm! Or do we?
 
 Ideal speedup with $N$ processors = $N$ and $N/logN < N$. This means that most
 processors are not "efficiently" utilized. We can come up with another
@@ -71,29 +72,34 @@ algorithm. Processors $4j+2$ sit idle forever after second step, and so on.
 
 Can we do better? Let's try again with $P < N$ processors. Here, we bootstrap 
 each processor with $N/P$ numbers. So first they compute the sum locally which 
-takes $O(N/P)$ and then follow the previous algorithm that takes $O(log P)$
+takes $\Theta(N/P)$ and then follow the previous algorithm that takes $\Theta(log P)$
 time.  So, we get $S = N / (N/P + logP) = P / (1 + PlogP/N)$ and $E = 1 / (1 +
 PlogP/N)$.
 
 If we fix the amount of work and keep adding processors, the efficiency will
 keep going down tending towards zero. This is because there is not enough work
-to do so processors have to sit idle. Conversely, if we fix the number of
-processors, and keep increasing the problem size, the efficiency increases
-tending towards 1. This is the behaviour we expect from scalable programs.
+to do so processors have to sit idle. This behaviour is seen in *all parallel
+programs*.
+
+Conversely, if we fix the number of processors, and keep increasing the problem
+size, the efficiency increases tending towards 1. This is the behaviour we
+expect from scalable programs. Not all parallel programs (unscalable) behave in
+this manner.
 
 <img src="assets/figs/efficiency-curves.png" alt="Efficiency curves" width="250"/>
 
 Another way to talk about scalability is to measure iso-efficiency $W$.
 Iso-efficiency is defined as the rate at which the problem size needs to grow,
-when we add a new processor, to maintain efficiency. Lower the rate of growth of
+when we add new processors, to maintain efficiency. Lower the rate of growth of
 the problem size, the more scalable is the program. For additions, $T_s = N =
-O(PlogP) = W$.
+\Theta(PlogP) = W$, i.e, if we go from $P$ to $P'$ processors, we need to
+increase problem size by a factor of $P'logP' / P logP$ to maintain efficiency.
 
 For completely unscalable program, like non-parallelizable code, $W = \infty$,
 i.e, there is no way increase the problem size to maintain efficiency when
-adding another processor. For embarrasingly parallel programs, $W = constant$,
-i.e, we just need to increase the problem size by a constant amount when we are
-adding a new processor.
+adding another processor. For embarrasingly parallel programs, $W = \Theta(P)$,
+i.e, we need to double the problem size when we are doubling the number of
+processors.
 
 ## Task DAGs
 
