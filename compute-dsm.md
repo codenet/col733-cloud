@@ -27,7 +27,7 @@ the page table to locate PPN for the VPN.
 Page table is just a hierarchical in-memory data structure to again map VPNs to
 PPNs. Each VPN is associated with a page table entry (PTE). A PTE contains the
 PPN and many bits. The one of interest is the present bit. If the present bit is
-not set, the hardware raise a page fault. The execution jumps into operating
+not set, the hardware raises a page fault. The execution jumps into operating
 system's page fault handler. The OS may have previously swapped out the page
 from memory to disk. It would have typically saved the location on disk within
 the PTE itself. At page fault, the OS copies the page back from disk to memory
@@ -148,16 +148,17 @@ one can make fault tolerant key-value stores.
 
 But if one of the worker crashes, we might lose its pages and its threads
 forever. Or if the worker is slow in handing out its pages, it will slow down
-all other workers.  To get fault tolerance, we can create checkpoints.
+all other workers.
 
 ### Checkpointing
-Periodically, a program "controller" (also called a "master") can ask all
-workers to stop whatever they are doing. After all workers are stopped, the
-controller asks them to create checkpoints.  Each worker writes all its pages 
-and the register states of all its threads to another worker's disk.  If one
-worker crashes, its checkpointed pages and threads can be recovered from another
-worker's disk.  When all workers have finished creating the checkpoint, the
-controller can resume all the workers. 
+To get fault tolerance, we can create checkpoints.  Periodically, a program
+"controller" (also called a "master") can ask all workers to stop whatever they
+are doing. After all workers are stopped, the controller asks them to create
+checkpoints.  Each worker writes all its pages and the register states of all
+its threads to other workers' disk.  If one worker crashes, its checkpointed
+pages and threads can be recovered from other workers' disk.  When all workers
+have finished creating the checkpoint, the controller can resume all the
+workers. 
 
 After a crash, can we resume the pages and threads of only the crashed worker,
 say W1, and rerun these threads on a new worker W1'? Unfortunately not! Other
@@ -173,22 +174,26 @@ to create a checkpoint is slow. Can we create a checkpoint *asynchronously*? Can
 the program controller ask all workers to create a checkpoint and we let workers
 create a checkpoint at their own pace whenever they hear from the controller?
 When a worker is done creating its own checkpoint, it resumes execution without
-waiting for other workers to finish creating their checkpoints.
+waiting for other workers to finish creating their checkpoints. In other words,
+can we create a checkpoint without stopping the whole program?
 
-Unfortunately, this also does not work. Here, an older value `x=1` and a newer
-value `y=3` got saved into the checkpoint. When the program resumes running the 
-loop, we get `x=2` and `y=5` which was not possible if no crash had happened!
-We call this an *inconsistent checkpoint*.
+Unfortunately, this also does not work. We demonstrate a simple example where we
+are running just a single thread and asynchronously checkpointing two pages
+while the thread is running. Here, an older value `x=1` and a newer value `y=3`
+got saved into the checkpoint. When the program resumes running the loop, we get
+`x=2` and `y=5` which was not a possible program state!  We call this an
+*inconsistent checkpoint*.
 
 <img src="assets/figs/dsm-async-cps.png" alt="Asynchronous checkpoints can be inconsistent" width="300"/>
 
 ### Replication
 Since checkpointing and recovering from checkpointing is slow, we can also do 
 replication. Whenever a worker writes, the writes are sent to all the copies to
-keep all copies up-to-date. The advantage is that we never lose a page. However,
-this significantly slows down all writes. 
+keep all copies up-to-date. The advantage is that we never lose a page and hence
+may not need to rollback to an older state. However, this significantly slows
+down all writes. 
 
-The bigger problem is on how to recover the thread contexts? Shall we replicate
+The bigger problem is how to recover the thread contexts? Shall we replicate
 thread context after every instruction? That will be even slower :( We don't
 want to do that. Can we just restart the thread after a crash? Let us say the
 thread was simply doing `x++; y--`. After incrementing `x` it crashes.  If we
@@ -198,8 +203,9 @@ decrementing `y` only once!
 
 There are two ways to get around this:
 * The execution is somehow made *idempotent*. If `x++` is done already, then
-re-executing it is a no-op. Idempotence in this context means that the effect of
-running something N times is the same as the effect of running it once.
+re-executing it should be a no-op. Idempotence in this context means that the
+effect of running something N times is the same as the effect of running it
+once.
 * The execution is somehow made *transactional*. We shouldn't have been able to 
 increment `x++` without doing `y--` in the first crashed execution. Transactions
 are atomic: "all-or-nothing", i.e, either all writes succeed or none succeed.
