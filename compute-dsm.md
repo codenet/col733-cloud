@@ -3,7 +3,7 @@
 DSM implementations were the early attempts to do distributed computation as we
 realized that Moore's law will not be forever. We could pack multiple CPUs
 within a single machine but the number of CPUs we can pack will be limited as
-the memory bus will start becoming a bottleneck. Distributed computations runs a
+the memory bus will start becoming a bottleneck. Distributed computations run a
 program over multiple independent machines containing their own private CPUs,
 caches, and DRAMs. These machines are connected to each other over a network.
 
@@ -225,6 +225,9 @@ that does not lose pages. But replication slows down writes. Under the
 replication scheme, how to restructure threads so that they can be restarted?
 Their execution needs to be idempotent or transactional.
 
-We will study all of this aspects in distributed computing. We will give up
-supporting general-purpose programs and build different abstractions more
-suitable for distributed computing.
+Synchronous checkpointing and restarting everything from the last checkpoint is
+easiest to think about and is under use in many systems like [PyTorch
+training](https://pytorch.org/tutorials/beginner/ddp_series_fault_tolerance.html).
+Other systems that we will study will improve upon these limitations. We will
+give up supporting general-purpose programs and build different abstractions
+more suitable for distributed computing.
