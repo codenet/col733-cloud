@@ -3,7 +3,8 @@
 ### Context
 POSIX threads became a standard in 1995; OpenMP became a standard in 1997. But
 doing parallel programming remained hard. Programmer has to worry about
-processor efficiency, locking to prevent race conditions, deadlocks and so on. 
+efficiently using available processors, locking to prevent race conditions,
+deadlocks and so on. 
 
 For Google, input data size (TBs) grew well beyond the memory (4GB) and disk
 (16GB) of a single commodity computer. One approach to work with such large
@@ -54,11 +55,11 @@ reduce(String key, Iterator values):
 ```
 
 It will execute in the following manner. There are a number of map tasks. Each
-task takes a document and emits 1 one for each occurence of each word in the
+task takes a document and emits "1" for each occurence of each word in the
 document. The word is hashed to find its appropriate reduce task; reduce task
 sums up all the occurences for each word.
 
-<img src="assets/figs/mr-run.png" alt="An example run of MapReduce" width="500"/>
+<img src="assets/figs/mr-run.png" alt="An example run of MapReduce" width="250"/>
 
 MapReduce is interesting because it could solve a large number of problems for
 Google such as counting access frequencies of URLs using the word count above,
@@ -99,6 +100,7 @@ M3 | waiting to be scheduled |
 .. | .. | ..
 R1 | in-progress on W2 |
 R2 | waiting to be scheduled |
+.. | .. | ..
 
 When reduce tasks have pulled all their inputs, they can proceed and run the
 user-defined reduce function. The output of the reduce is written back to the
@@ -125,7 +127,7 @@ We see that in ideal conditions and with `M, R >> p`, MapReduce has no idling
 workers! Doing the scalability analysis, shows that under ideal conditions,
 MapReduce has a good iso-efficiency `W = O(p*p)`.
 
-<img src="assets/figs/mr-scalability.png" alt="MapReduce scalability analysis" width="300"/>
+<img src="assets/figs/mr-scalability.png" alt="MapReduce scalability analysis" width="450"/>
 
 MapReduce design takes locality and load-balancing into account. Controller does
 best-effort scheduling to assign map tasks on workers that are close to the
@@ -198,11 +200,11 @@ pull `W2R2.txt` to complete `R2`.
 If map tasks are *deterministic*, `W1R2.txt` and `W2R2.txt` will be identical.
 Otherwise, the two files may be different. So `R1` worked on `W1R1.txt` and `R2`
 worked on `W2R2.txt` which were two different diverging map task executions.
-Programmer needs to be aware of this possibility and should write deterministic
-tasks.
+Programmer needs to be aware of this possibility and should write
+**deterministic** tasks.
 
 Since map and reduce tasks may get executed multiple times due to faults and
-stragglers, side-effects made by the tasks should be made *idempotent*. For
+stragglers, side-effects made by the tasks should be made **idempotent**. For
 example, if a task was adding some rows to a database, programmer needs to
 ensure that the task does not add the same rows twice when the task is run
 twice. Idempotence in this context means running a task N times has the same
@@ -230,7 +232,8 @@ re-scheduled on live workers.
 # Summary
 The programmer just writes a map and a reduce function, tests it locally, and
 then gives it to the MapReduce system to run in a distributed manner. MapReduce
-takes care of locality, load balancing, straggler mitigation and fault
-tolerance.  Last two are done by re-execution of lost tasks. It is recommended
-for tasks to be deterministic and idempotent to get sensible outputs.
+takes care of locality, load balancing, straggler mitigation, and fault
+tolerance.  Last two are done by re-execution of lost/slow tasks. Due to the
+possibility of duplicate task executions, it is recommended for tasks to be
+deterministic and idempotent to get sensible outputs.
 
