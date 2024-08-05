@@ -183,7 +183,7 @@ either has finished.
 The approach to fault tolerance is similar to that of straggler mitigation. Upon
 detecting a crashed worker, the controller re-executes the worker's tasks. The
 controller keeps periodically pinging all the workers. These pings are also
-called heartbeats and are used in most distributed systems to detect crashes.
+called *heartbeats* and are used in most distributed systems to detect crashes.
 If the worker misses a few consecutive heartbeats, the controller thinks that
 the worker is dead and marks all done, in-progress map tasks as waiting to be
 scheduled. This is because the output of map tasks were in the local disks of
