@@ -1,0 +1,15 @@
+{
+    "LOGFILE": "/tmp/wc.log",
+
+    "N_NORMAL_WORKERS": 5,
+    "N_CRASHING_WORKERS": 2,
+    "N_SLEEPING_WORKERS": 1,
+
+    "DATA_PATH":  "/home/baadalvm/data/*.csv",
+    "IN":  "files",
+    "FNAME":  "fname",
+    "COUNT":  "count",
+
+    "CHECKPOINT_INTERVAL": 2,
+    "REDIS_DOWNTIME": 1
+}

@@ -1,0 +1,4 @@
+mypy==1.4.1
+redis==4.6.0
+types-redis==4.6.0.3
+pandas==2.0.3
