@@ -21,7 +21,7 @@ Familiarize yourself with [Redis](https://redis.io/).  You need `docker` and
 `redis` installed for this.
 
 ```
-docker run -d -p 6379:6379 redis:7.0-rc3
+docker run -d -p 6379:6379 -v /home/baadalvm/redis:/data --name redis --rm redis:7.4
 ```
 
 Learn sending commands to redis using `redis-cli` and from python programs using
@@ -38,7 +38,7 @@ following redis stream commands for the first part: `xadd`, `xreadgroup`,
 We will first make the word count application run end-to-end using Redis.  But
 before that, download the starter code.
 
-Update `GLOB` in `constants.py` to point to your `data` folder.  Run 
+Update `DATA_PATH` in `config.json` to point to your `data` folder.  Run 
 `python3 client.py`. In this lab, you have to modify `worker.py` and `myrds.py`.
 
 The basic structure is as follows: 
