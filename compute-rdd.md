@@ -23,7 +23,7 @@ restore from this state and continue executing the `for` loop, we will reach
 $x=2$ and $y=5$ which could not have been reached in a fault-free execution.
 
 The main problem is that our checkpointing and restore mechanism got confused
-between multiple *instances* of $x$s and $y$s. We checkpointed $x$ from the
+between multiple *instances* of $x$ and $y$. We checkpointed $x$ from the
 first iteration and $y$ from the second iteration. And then we didn't know that
 they are from two different iterations. 
 
@@ -44,22 +44,23 @@ shows the lineage between program variables in our toy program:
 
 <img src="assets/figs/spark-lineage.png" alt="Recovering using lineage" width="350"/>
 
-To come to the latest loop iteration, we need not recover $y_0=1$. We can just
+To come to the latest loop iteration, we *need not* recover $y_0=1$. We can just
 follow the lineage to recover $x_1$ and then continue the loop from there to
 compute $x_2, y_2$. For recovering variables using lineage, we need to
-re-execute the task on the lineage edge; so these tasks must be
-**deterministic**.
+re-execute the task on the lineage edge; tasks must be **deterministic** and
+**idempotent**.
 
-For example, here we change the toy program to do `x+=random()`. In the original
-execution, $x_1=2, y_1=3$. Now when we recover $x_1$ from the checkpoint, we
-re-execute `x+=random()` and get $x_1=6$. Note that $x_1=6, y_1=3$ is an
-inconsistent state: it cannot be reached from $x_0=1, y_0=1$ in a fault-free
-execution.
+For example, let us say we change the toy program to do `x+=random()`. In the
+original execution, $x_1=2, y_1=3$. Now when we recover $x_1$ from the
+checkpoint, we re-execute `x+=random()` and get $x_1=6$. Note that $x_1=6,
+y_1=3$ is an inconsistent state: it cannot be reached from $x_0=1, y_0=1$ in a
+fault-free execution.
 
 <img src="assets/figs/spark-non-det.png" alt="Non-deterministic tasks" width="450"/>
 
 Of course if we apply these ideas to regular programs, we will end up with
-humongous lineage graphs. The idea of Spark is that 
+humongous lineage graphs. To reduce the size of lineage graphs, the idea of
+Spark is that 
 
 1. Our immutable variables will be large collections instead of small scalar
 values;
@@ -88,7 +89,7 @@ errors.persist()
 In the following figure for example, there are three partitions of `lines` 
 resident on three workers. The user-defined `filter` is applied on each
 partition independently and locally by each worker to get three partitions of
-`error`. Each partition is immutable. The following figure shows the lineage
+`error`. Each RDD partition is immutable. The following figure shows the lineage
 graph.
 
 <img src="assets/figs/spark-rdd.png" alt="Lineage graph with RDDs" width="450"/>
@@ -99,17 +100,17 @@ Execution is similar to [MapReduce](./compute-mr). There is a driver machine
 that manages other worker machines. The driver is keeping track of RDDs. For
 each RDD, driver knows its 
 * number of partitions, 
-* partition function: may be simple hash-based or could be user-specified;
-for example, user wants all data related to iitd.ac.in within a single partition
-* where are its partitions: partitions may be replicated for FT
-* list of dependencies (lineage)
+* partition function: may be simple hash-based or could be user-specified.
+For example, user wants all data related to iitd.ac.in within a single partition,
+* where are its partitions: partitions may be replicated for FT,
+* list of dependencies (lineage).
 
 Let us see an example execution of a
 [PageRank](https://github.com/apache/spark/blob/master/examples/src/main/python/pagerank.py)
 program written using Spark. PageRank measures the popularity of pages. 
 Given the following graph, one would expect 
 * u1 and u3 to have equal ranks,
-* u2 to have higher ranks than u1 and u3
+* u2 to have a higher rank than u1 and u3
 * u4 to have a higher rank than u2 (a popular page u2 thinks u4 is popular, but
   u4 does not consider u2 to be popular).
 
@@ -158,10 +159,10 @@ to get the next set of ranks.
 
 <img src="assets/figs/spark-pagerank-dryrun.png" alt="PageRank as a series of MapReduce" width="450"/>
 
-Observe that `links` is cached since it is used in every iteration. "Narrow
-dependencies" are executed locally. "Wide dependencies" require a shuffle
-between workers. PageRank builds the following lineage graph when it is running
-on two workers.
+Observe that `links` is cached since it is used in every iteration. Spark
+classifies all transformations into narrow and wide. "Narrow dependencies" are
+executed locally. "Wide dependencies" require a shuffle between workers.
+PageRank builds the following lineage graph when it is running on two workers.
 
 ```mermaid
 flowchart LR
@@ -222,7 +223,7 @@ A checkpoint can be made asynchronously since partitions will not get modified
 while we are checkpointing them. Checkpointing an RDD involves workers
 replicating all of the RDD partitions into each other's memory. If worker memory
 is getting full, it can spill some RDD partitions to disk. Users can provide a
-persistence priority to RDDs to guide Spark.
+"persistence priority" to RDDs to guide Spark.
 
 The approach to straggler mitigation is similar to MapReduce: start backup tasks
 and let two workers race with each other to compute RDD partitions. Since, the
