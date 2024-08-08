@@ -17,7 +17,7 @@ workers would additionally use a distributed file system like HDFS or a blob
 store like S3.
 
 ## Part 0
-Familiarize yourself with [Redis](./redis).  You need `docker` and
+Familiarize yourself with [Redis](./redis). You need `docker` and
 `redis` installed for this.
 
 ```
