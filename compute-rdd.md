@@ -152,17 +152,15 @@ for iteration in range(int(sys.argv[2])):
 ```
 
 In the following, we see how `pagerank.py` executes as a series of mapreduce
-operations. The graph is stored in HDFS partitions. It is parsed to find
+jobs. The graph is stored in HDFS partitions. It is parsed to find
 `links`. Each link contributes a ratio to every other URL. These contributions
 are added up together for each URL, multiplied by 0.85, and we finally add 0.15
 to get the next set of ranks.
 
 <img src="assets/figs/spark-pagerank-dryrun.png" alt="PageRank as a series of MapReduce" width="450"/>
 
-Observe that `links` is cached since it is used in every iteration. Spark
-classifies all transformations into narrow and wide. "Narrow dependencies" are
-executed locally. "Wide dependencies" require a shuffle between workers.
-PageRank builds the following lineage graph when it is running on two workers.
+Observe that `links` is cached since it is used in every iteration. PageRank
+builds the following lineage graph when it is running on two workers.
 
 ```mermaid
 flowchart LR
@@ -206,11 +204,19 @@ flowchart LR
 		ranks12 -- join --> jj12
 		links2 -- join --> jj12
 	end
-```
+``` 
 
-Note that `dlinks` -> `groupByKey` -> `links` is a narrow operation since the 
+All the "*1" partitions such as `hdfs1`, `lines1`, `neigh1` etc. are resident on
+worker-1 and all the "*2" partitions such as `hdfs2`, `lines2`, `neigh2` etc.
+are resident on worker-2. Spark classifies all transformations into narrow and
+wide.  "Narrow dependencies" are executed locally. "Wide dependencies" require a
+shuffle between workers. The figure above shows all the narrow dependencies. 
+`distinct` and `reduceByKey` are wide dependencies.
+
+
+Note that `dlinks` -> `groupByKey` -> `links` is a narrow dependency since the 
 RDDs are already partitioned by URLs. `links`, `ranks` -> `join` -> `jj` is also
-a narrow operation since `links` and `ranks` are "co-partitioned", i.e, same
+a narrow dependency since `links` and `ranks` are "co-partitioned", i.e, same
 source URLs (which determine the join condition) are in the same partition.
 Narrow dependencies are preferred over wide-dependencies since 
 * transformations can pipeline data within a worker, whereas wide dependencies
@@ -272,4 +278,5 @@ partition RDDs.
 
 The design is quite similar to MapReduce. Spark supports more database-like
 operators, such as `join` and `groupBy`, and especially wins on iterative
-computations since MapReduce had to go to disk after every iteration.
+computations since MapReduce had to go to cluster file system after every
+iteration.
