@@ -185,13 +185,13 @@ flowchart LR
 		links1 -- map --> ranks01
 		links1 -- join --> jj01
 		ranks01 -- join --> jj01
-		jj01 -- map --> contribs01
+		jj01 -- flatmap --> contribs01
 
 		dlinks2 -- groupByKey --> links2:::cached
 		links2 -- map --> ranks02
 		links2 -- join --> jj02
 		ranks02 -- join --> jj02
-		jj02 -- map --> contribs02
+		jj02 -- flatmap --> contribs02
 	end
 
 
@@ -208,10 +208,21 @@ flowchart LR
 	end
 ```
 
-We could do the same computation using a series of MapReduce jobs, but each
-MapReduce job writes its output to GFS. Therefore, each PageRank iteration will
-necessarily write to GFS. Spark can choose to persist every few iterations to
-reduce disk overhead.
+Note that `dlinks` -> `groupByKey` -> `links` is a narrow operation since the 
+RDDs are already partitioned by URLs. `links`, `ranks` -> `join` -> `jj` is also
+a narrow operation since `links` and `ranks` are "co-partitioned", i.e, same
+source URLs (which determine the join condition) are in the same partition.
+Narrow dependencies are preferred over wide-dependencies since 
+* transformations can pipeline data within a worker, whereas wide dependencies
+require data to be available on all parent partitions; and
+* at a crash, we just need to recover one parent partition, whereas for wide 
+dependency, we need to recover all parent partitions.
+
+We could do the same computation using a series of MapReduce jobs. A sequence of
+narrow dependencies can be written as a `map` task, and a wide-dependency can be
+written as a `reduce` task. But, each MapReduce job writes its output to GFS.
+Therefore, each PageRank iteration will necessarily write to GFS. Spark can
+choose to persist every few iterations to reduce disk overhead.
 
 The approach to fault tolerance is simple: recompute lost partitions by
 following the lineage backwards. To avoid ending up with long lineage chains, we
@@ -232,9 +243,9 @@ should end up computing the same RDD partition.
 
 ### Evaluation
 Figure 7 shows that later iterations of Spark are much faster than in Hadoop
-since the data is already present in memory. In Figure 11, authors inject a
-fault in iteration 6. Iteration 6 takes longer time than other iterations due to
-the recovery via lineage-based reexecution.
+(an open-source clone of MapReduce) since the data is already present in memory.
+In Figure 11, authors inject a fault in iteration 6. Iteration 6 takes longer
+time than other iterations due to the recovery via lineage-based reexecution.
 
 ## Summary
 
@@ -250,8 +261,8 @@ In contrast, RDDs allow only deterministic coarse-grained transformations.
 Because RDDs are immutable, we can easily create multiple replicas without
 worrying about consistency. These checkpoint replicas can be made asynchronously
 as the program is guaranteed to not modify once-written RDDs. Checkpointing is
-cheaper than a full checkpoint. We can smartly choose to checkpoint (slower to
-compute, faster to checkpoint) RDDs. After crashes, we need not rollback entire
+cheaper than a full checkpoint. We can smartly choose to checkpoint slower to
+compute and faster to checkpoint RDDs. After crashes, we need not rollback entire
 program back to the last checkpoint. Only the lost partitions can be recovered
 using its lineage. To overcome stragglers, backup workers can race to compute
 RDD partitions. Because of deterministic tasks, both racing workers shall end up
