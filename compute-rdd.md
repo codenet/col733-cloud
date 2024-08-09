@@ -31,10 +31,10 @@ The first idea of Spark is that let us make our variables **immutable**. In our
 toy example, it means that $x$ in the first iteration *is not the same as* $x$
 in the second iteration. Let us refer to variables in different iterations as
 $x_0, y_0$; $x_1, y_1$ etc. The immutability of variables also helps in
-replicating them: due to immutability, we need not worry about *consistency*
-during replication. We can easily create multiple replicas of each variable
-while the program is running, since the program is guaranteed to not modify
-variables further.
+replicating and checkpointing them: due to immutability, we need not worry about
+*consistency* during replication. We can easily create multiple replicas of each
+variable while the program is running, since the program is guaranteed to not
+modify variables further.
 
 Now, even with separate naming convention and immutability of variables, we
 might still capture, in our asynchronous checkpoint, different variable
@@ -69,9 +69,9 @@ reduce, etc.  that take one collection to another collection. Roughly speaking,
 a coarse-grained transformation applies the same function to each element in the
 collection.
 
-Therefore, the lineage graph will be small. An edge in the lineage graph takes
-one large collection to another large collection using a deterministic
-coarse-grained transformation.
+Therefore, the lineage graph will be small. A node in the lineage graph is a 
+large collection. An edge in the lineage graph takes one large collection to
+another large collection using a deterministic coarse-grained transformation.
 
 ## Resilient distributed datasets
 
@@ -86,11 +86,11 @@ errors = lines.filter(_.startsWith("ERROR"))
 errors.persist()
 ```
 
-In the following figure for example, there are three partitions of `lines` 
+In the following figure for example, there are three *partitions* of `lines` 
 resident on three workers. The user-defined `filter` is applied on each
 partition independently and locally by each worker to get three partitions of
-`error`. Each RDD partition is immutable. The following figure shows the lineage
-graph.
+`error`. Each RDD partition, one written, is immutable. The following figure
+shows the lineage graph.
 
 <img src="assets/figs/spark-rdd.png" alt="Lineage graph with RDDs" width="450"/>
 
@@ -101,9 +101,9 @@ that manages other worker machines. The driver is keeping track of RDDs. For
 each RDD, driver knows its 
 * number of partitions, 
 * partition function: may be simple hash-based or could be user-specified.
-For example, user wants all data related to iitd.ac.in within a single partition,
 * where are its partitions: partitions may be replicated for FT,
-* list of dependencies (lineage).
+* list of dependencies i.e, lineage: which other partitions does this partition
+  depend upon and how to get this partition from them.
 
 Let us see an example execution of a
 [PageRank](https://github.com/apache/spark/blob/master/examples/src/main/python/pagerank.py)
@@ -143,19 +143,19 @@ ranks = links.map(lambda url_neighbors: (url_neighbors[0], 1.0))
 # Calculates and updates URL ranks continuously using PageRank algorithm.
 for iteration in range(int(sys.argv[2])):
 	# Calculates URL contributions to the rank of other URLs.
-	contribs = links.join(ranks).flatMap(lambda url_urls_rank: computeContribs(
-		url_urls_rank[1][0], url_urls_rank[1][1]
-	))
+  contribs = links.join(ranks).flatMap(lambda url_urls_rank: computeContribs(
+    url_urls_rank[1][0], url_urls_rank[1][1]
+  ))
 
-	# Re-calculates URL ranks based on neighbor contributions.
-	ranks = contribs.reduceByKey(add).mapValues(lambda rank: rank * 0.85 + 0.15)
+  # Re-calculates URL ranks based on neighbor contributions.
+  ranks = contribs.reduceByKey(add).mapValues(lambda rank: rank * 0.85 + 0.15)
 ```
 
-In the following, we see how `pagerank.py` executes as a series of mapreduce
-jobs. The graph is stored in HDFS partitions. It is parsed to find
-`links`. Each link contributes a ratio to every other URL. These contributions
-are added up together for each URL, multiplied by 0.85, and we finally add 0.15
-to get the next set of ranks.
+In the following, we see how `pagerank.py` executes. The graph is stored in HDFS
+partitions. It is parsed to find `links`. Each link contributes a ratio to every
+other URL. These contributions are added up together for each URL, multiplied by
+0.85, and we finally add 0.15 to get the `ranks`. We repeat this process for
+multple iterations.
 
 <img src="assets/figs/spark-pagerank-dryrun.png" alt="PageRank as a series of MapReduce" width="450"/>
 
@@ -206,8 +206,8 @@ flowchart LR
 	end
 ``` 
 
-All the "*1" partitions such as `hdfs1`, `lines1`, `neigh1` etc. are resident on
-worker-1 and all the "*2" partitions such as `hdfs2`, `lines2`, `neigh2` etc.
+All the ..1 partitions such as `hdfs1`, `lines1`, `neigh1` etc. are resident on
+worker-1 and all the ..2 partitions such as `hdfs2`, `lines2`, `neigh2` etc.
 are resident on worker-2. Spark classifies all transformations into narrow and
 wide.  "Narrow dependencies" are executed locally. "Wide dependencies" require a
 shuffle between workers. The figure above shows all the narrow dependencies. 
