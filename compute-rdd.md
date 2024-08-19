@@ -24,8 +24,8 @@ $x=2$ and $y=5$ which could not have been reached in a fault-free execution.
 
 The main problem is that our checkpointing and restore mechanism got confused
 between multiple *instances* of $x$ and $y$. We checkpointed $x$ from the
-first iteration and $y$ from the second iteration. And then we didn't know that
-they are from two different iterations. 
+first iteration and $y$ from the second iteration. And then after recovery, 
+we didn't know that they are from two different iterations. 
 
 The first idea of Spark is that let us make our variables **immutable**. In our
 toy example, it means that $x$ in the first iteration *is not the same as* $x$
