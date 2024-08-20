@@ -36,19 +36,19 @@ replicating and checkpointing them: due to immutability, we need not worry about
 variable while the program is running, since the program is guaranteed to not
 modify variables further.
 
-Now, even with separate naming convention and immutability of variables, we
-might still capture, in our asynchronous checkpoint, different variable
+Now, even with separate naming convention and immutability of variables, let us 
+say we still capture, in our asynchronous checkpoint, different variable
 versions, i.e, $x_0=1$ and $y_1=3$. The second idea is to remember the
 **lineage** and recover the program state using it. For example, the following
 shows the lineage between program variables in our toy program:
 
 <img src="assets/figs/spark-lineage.png" alt="Recovering using lineage" width="350"/>
 
-To come to the latest loop iteration, we *need not* recover $y_0=1$. We can just
-follow the lineage to recover $x_1$ and then continue the loop from there to
-compute $x_2, y_2$. For recovering variables using lineage, we need to
-re-execute the task on the lineage edge; tasks must be **deterministic** and
-**idempotent**.
+To come to the latest loop iteration, we can just follow the lineage to recover
+$x_1$ and then continue the loop from there to compute $x_2, y_2$. Notice that
+we *need not* recover $y_0=1$ since we already have $y_1=3$ in our checkpoint.
+For recovering variables using lineage, we re-execute the task on the lineage
+edge; tasks must be **deterministic** and **idempotent**. 
 
 For example, let us say we change the toy program to do `x+=random()`. In the
 original execution, $x_1=2, y_1=3$. Now when we recover $x_1$ from the
@@ -89,7 +89,7 @@ errors.persist()
 In the following figure for example, there are three *partitions* of `lines` 
 resident on three workers. The user-defined `filter` is applied on each
 partition independently and locally by each worker to get three partitions of
-`error`. Each RDD partition, one written, is immutable. The following figure
+`error`. Each RDD partition, once written, is immutable. The following figure
 shows the lineage graph.
 
 <img src="assets/figs/spark-rdd.png" alt="Lineage graph with RDDs" width="450"/>
@@ -103,7 +103,7 @@ each RDD, driver knows its
 * partition function: may be simple hash-based or could be user-specified.
 * where are its partitions: partitions may be replicated for FT,
 * list of dependencies i.e, lineage: which other partitions does this partition
-  depend upon and how to get this partition from them.
+  depend upon and the task to execute to get this partition from them.
 
 Let us see an example execution of a
 [PageRank](https://github.com/apache/spark/blob/master/examples/src/main/python/pagerank.py)
@@ -151,19 +151,43 @@ for iteration in range(int(sys.argv[2])):
   ranks = contribs.reduceByKey(add).mapValues(lambda rank: rank * 0.85 + 0.15)
 ```
 
-In the following, we see how `pagerank.py` executes. The graph is stored in HDFS
+In the following, we see how Pagerank executes. The graph is stored in HDFS
 partitions. It is parsed to find `links`. Each link contributes a ratio to every
 other URL. These contributions are added up together for each URL, multiplied by
 0.85, and we finally add 0.15 to get the `ranks`. We repeat this process for
-multple iterations.
-
-<img src="assets/figs/spark-pagerank-dryrun.png" alt="PageRank as a series of MapReduce" width="450"/>
-
-Observe that `links` is cached since it is used in every iteration. PageRank
-builds the following lineage graph when it is running on two workers.
+multple iterations.  Observe that `links` is cached since it is used in every
+iteration. PageRank builds the following lineage graph when it is running on two
+workers.
 
 ```mermaid
 flowchart LR
+  lines1[lines1\n u1 u2\n u3 u2\nu2 u4\n u1 u1]
+  lines2[lines2\n u2 u2\nu3 u3\nu4 u4\n u2 u4]
+
+	neigh1[neigh1\n u1->u2\n u3->u2\n u2->u4\n u1->u1]
+	neigh2[neigh2\n u2->u2\nu3->u3\nu4->u4\n u2->u4]
+
+	dlinks1[dlinks1\n u1->u2\n u1->u1\n u2->u4\n u2->u2]
+	dlinks2[dlinks2\n u3->u2\n u3->u3\nu4->u4]
+
+	links1[links1\n u1->u1, u2\n u2->u2, u4]
+	links2[links2\n u3->u2, u3\n u4->u4]
+
+	ranks01[ranks01\n u1: 1\n u2: 1]
+	ranks02[ranks02\n u3: 1\n u4: 1]
+
+	jj01[jj01\n u1: 1: u1, u2\n u2: 1: u2, u4]
+	jj02[jj02\n u3: 1: u2, u3\n u4: 1: u4]
+
+	contribs01[contribs01\n u1: 0.5\n u2: 0.5\n u2: 0.5\n u4: 0.5]
+	contribs02[contribs02\n u2: 0.5\n u3: 0.5\n u4: 1]
+
+	ranks11[ranks11\n u1: 0.5*0.85+0.15=0.575\n u2: 1.5*0.85+0.15=1.425]
+	ranks12[ranks12\n u3: 0.5*0.85+0.15=0.575\n u4: 1.5*0.85+0.15=1.425]
+
+	jj11[jj11\n u1: 0.575: u1, u2\n u2: 1.425: u2, u4]
+	jj12[jj12\n u3: 0.575: u2, u3\n u4: 1.425: u4]
+
 	classDef cached fill:#f96
 	subgraph narrow-1
 		hdfs1 -- read --> lines1
@@ -206,17 +230,18 @@ flowchart LR
 	end
 ``` 
 
-All the ..1 partitions such as `hdfs1`, `lines1`, `neigh1` etc. are resident on
-worker-1 and all the ..2 partitions such as `hdfs2`, `lines2`, `neigh2` etc.
-are resident on worker-2. Spark classifies all transformations into narrow and
-wide.  "Narrow dependencies" are executed locally. "Wide dependencies" require a
-shuffle between workers. The figure above shows all the narrow dependencies. 
-`distinct` and `reduceByKey` are wide dependencies.
+All the ..1 partitions such as `hdfs1`, `lines1`, `neigh1`, `ranks01`, etc. are
+resident on worker-1 and all the ..2 partitions such as `hdfs2`, `lines2`,
+`neigh2`, `ranks02`,  etc.  are resident on worker-2. Spark classifies all
+transformations into narrow and wide. *Narrow dependencies* are executed
+locally. *Wide dependencies* require a shuffle between workers. The figure above
+shows all the narrow dependencies.  `distinct` and `reduceByKey` are wide
+dependencies.
 
 
 Note that `dlinks` -> `groupByKey` -> `links` is a narrow dependency since the 
-RDDs are already partitioned by URLs. `links`, `ranks` -> `join` -> `jj` is also
-a narrow dependency since `links` and `ranks` are "co-partitioned", i.e, same
+RDDs are already partitioned by URLs. `links`, `ranks0` -> `join` -> `jj0` is also
+a narrow dependency since `links` and `ranks0` are "co-partitioned", i.e, same
 source URLs (which determine the join condition) are in the same partition.
 Narrow dependencies are preferred over wide-dependencies since 
 * transformations can pipeline data within a worker, whereas wide dependencies
@@ -231,8 +256,9 @@ Therefore, each PageRank iteration will necessarily write to GFS. Spark can
 choose to persist every few iterations to reduce disk overhead.
 
 The approach to fault tolerance is simple: recompute lost partitions by
-following the lineage backwards. To avoid ending up with long lineage chains, we
-should checkpoint occasionally. We can be smart in doing this checkpointing. For
+following the lineage backwards upto the checkpoint, then re-execute tasks on
+the graph edges forward. To avoid ending up with long lineage chains, we should
+checkpoint occasionally. We can be smart in doing this checkpointing. For
 example in the PageRank program, `ranks` is O(number of URLs) and `contribs` is
 O(number of web links); so checkpointing `ranks` should be preferred. 
 
@@ -244,7 +270,7 @@ is getting full, it can spill some RDD partitions to disk. Users can provide a
 
 The approach to straggler mitigation is similar to MapReduce: start backup tasks
 and let two workers race with each other to compute RDD partitions. Since, the
-transformation are deterministic and inputs are immutable, both racing workers
+transformations are deterministic and inputs are immutable, both racing workers
 should end up computing the same RDD partition.
 
 ### Evaluation
