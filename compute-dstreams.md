@@ -101,43 +101,12 @@ Spark's locality-aware scheduling, the next interval of word count is calculated
 locally thereby avoiding a network transfer. RDDs are checkpointed occasionally;
 old RDDs are GC'ed from memory.
 
-This approach works well but it does not provide good freshness in the common
-case as it adds a 0.5-2 seconds of discretization delay. For many usecases, like
-trending topics in Twitter, this is ok. But, when you want to make real-time
-decisions like approving credit-card transactions, this is not ok.
+## Summary
+Streaming computations have a new concern of freshness. Approaches studied for
+batch computation do not immediately translate because of stateful tasks. 
 
-## Naive checkpointing approach
-
-Continuous operator model provided low latency in the common case. Let's try
-another approach to do fault tolerance of stateful operators by creating
-checkpoints. A checkpoint, also called a snapshot, is a *cut* in the timeline of
-events that separates past events (in the checkpoint) from future events (not in
-checkpoint).
-
-<img src="assets/figs/dstream-checkpoints.png" alt="Checkpoints" width="300"/>
-
-One approach to create an asynchronous global checkpoint could be to let the 
-*checkpoint coordinator* pre-decide a global timestamp $T + \Delta$. Each
-worker checkpoints its state at this pre-decided timestamp. Mappers checkpoint
-their "cursor": which ID of the stream did they process last, and reducers
-checkpoint their word counts.
-
-Does this work? No, this simple approach loses in-flight messages. We also need
-to checkpoint message that were sent before the checkpoint but received after
-the checkpoint time. But, now how do we know that a checkpoint is *complete*?
-Reducers might get a pre-checkpoint message at any time.
-
-One simple algorithm is to maintain a "deficit" count at the checkpoint
-coordinator. For example, the mappers can remember how many messages it sent
-before the checkpoint time. And the reducers can remember how many messages it
-has received from before the checkpoint time. Checkpoint coordinator can
-maintain "deficit = sent - received". When deficit hits zero, we know that the
-checkpoint is complete.
-
-Upon crash, all workers and channels revert to the last checkpoint: mappers
-rewind to the saved cursor, in-flight messages are put in the receive buffers of
-reducers, reducers roll back to the saved word counts.
-
-However unfortunately, the pre-decided timestamp approach does not work because
-it is not possible to have perfectly synchronized clocks. We will see how clock
-drifts can lead to creation of inconsistent checkpoints.
+Discretizing streams into mini-batches makes all tasks stateless. This approach
+works well but it does not provide good freshness in the common case as it adds
+a 0.5-2 seconds of discretization delay.  For many usecases, like trending
+topics in Twitter, this is ok. But, when you want to make real-time decisions
+like approving credit-card transactions, such delays may not be acceptable.
