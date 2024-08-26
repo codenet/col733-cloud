@@ -8,8 +8,8 @@ making tasks stateless, but reduces freshness in the common case: when there are
 no failures.
 
 Let's go back to continuous operator model. Here, tokenizer is running on
-workers M, N, O and aggregator is running on workers P, Q. Remember that P and Q
-are stateful; they contain word counts.
+workers M, N, O and aggregator is running on workers P, Q. Remember that M, N,
+and O contain "cursors" of their streams and P and Q contain word counts.
 
 <img src="assets/figs/vc-cont-op.png" alt="Checkpoints" width="300"/>
 
@@ -17,6 +17,12 @@ We will try another approach to do fault tolerance of stateful operators by
 creating checkpoints. A checkpoint, also called a snapshot, can be thought of as
 a *cut* in the timeline of events that separates past events (in the checkpoint)
 from future events (not in checkpoint).
+
+The following example shows an example event timeline where worker M is
+processing two tweets "ab" and "aa". It sends word counts to workers P and Q. We
+ignore workers N and O in rest of the discussion. Processing of tweet "ab" is in
+the checkpoint and of tweet "aa" is not in the checkpoint. Worker M checkpoints
+it cursor; workers P and Q checkpoint their respective word counts.
 
 <img src="assets/figs/dstream-checkpoints.png" alt="Checkpoints" width="300"/>
 
@@ -38,9 +44,9 @@ to maintain a "deficit" count at the checkpoint coordinator. For example, the
 mappers can remember how many messages it sent before the checkpoint time. And
 the reducers can remember how many messages it has received from before the
 checkpoint time. Checkpoint coordinator can maintain 
-$total\;deficit = total\;sent - total\;received$. 
+total deficit = total sent - total received. 
 After the checkpoint time $\tau$ has passed, as reducers receive more messages,
-they keep increasing $total\;received$.  When $total\;deficit$ hits zero, we
+they keep increasing total received.  When total deficit hits zero, we
 know that the checkpoint is complete.
 
 Upon crash, all workers and channels revert to the last checkpoint: mappers
@@ -90,7 +96,7 @@ becomes $\tau$. Notice that the clock drifts in different computers can be
 arbitrary, so local times do not match the real time and do not match each
 other. Following shows an inconsistent checkpoint:
 
-<img src="assets/figs/vc-clock-drift-inconsistent.png" alt="Inconsistent checkpoint due to clock drift" width="300"/>
+<img src="assets/figs/vc-clock-drift-inconsistent.png" alt="Inconsistent checkpoint due to clock drift" width="350"/>
 
 Pre-decided timestamp approach tried to create a checkpoint at an actual global
 time. In absence of clock drifts, such a checkpoint is consistent since it
@@ -99,9 +105,9 @@ state. This checkpoint properly separates past from the future and is therefore
 consistent.
 
 Whereas, in the example above, "future" event i.e, events not in the checkpoint
-$aa@M$ has affected "past" event, i.e, events in the checkpoint, $a=2@P$ and is
-therefore inconsistent. Recovering from this checkpoint leads to double counting
-of "aa".
+"M sending a:2" has affected "past" event, i.e, events in the checkpoint, "P
+receiving a=2" and is therefore inconsistent. Recovering from this checkpoint
+leads to double counting of "aa".
 
 ## Consistent Checkpoints
 Since *no one* knows the actual global time, we must relax the *simultaneity*
@@ -116,7 +122,7 @@ Observe that the system was never simultaneously in the checkpointed state! When
 `Q` had "b=1", `P`'s count was already "a=3".
 
 ## Vector clocks
-We now want to tweak this algorithm and make it work in the presence of clock
+We now want to tweak the above algorithm and make it work in the presence of clock
 drifts. Since workers anyways do not know the actual global time, we are going
 to let go of actual global time and the workers' local clock time. We will
 instead use a *virtual time* in the form of *vector clocks*.
@@ -140,21 +146,22 @@ The following shows an example:
 
 <img src="assets/figs/vc-timekeeping.png" alt="Timekeeping mechanism" width="200"/>
 
-We say $u < v$, if $\forall i: u_i < v_i$.  We say two vector clocks are
-concurrent $u || v$ if neither $u < v$ nor $v < u$. With the above timekeeping
-mechanism, vector clocks *maintain causality*, i.e, $C(e_1) < C(e_2)$ iff $e_1
-\rightarrow e_2$.
+We say $u \leq v$, if $\forall i: u_i \leq v_i$. Further, $u < v$, if $u \leq v$
+and $u \neq v$.  We say two vector clocks are concurrent $u || v$ if neither $u
+< v$ nor $v < u$. With the above timekeeping mechanism, vector clocks *maintain
+causality*, i.e, $C(e_1) < C(e_2)$ iff $e_1 \rightarrow e_2$.
 
 In the above example, $C(m_1) < C(p_2)$; $m_1$ has causally affected $p_2$,
 i.e, $m_1 \rightarrow p_2$.  Whereas, $C(p_2) \not< C(q_1)$ and $C(q_1) \not<
 C(p_2)$, therefore $C(p_2) || C(q_1)$. Neither has causally affected the other,
 i.e, they are concurrent, $p_2 || q_1$.
 
-In the inconsistent checkpoint seen before, worker `P` had a "future event" 
-$(2, 2, 0)$ in the checkpoint but worker `M` did not have a "past event" 
-$(2, 0, 0)$ in the checkpoint. Past and future correspond to causality and not
-real-time; they are decided by $<$ relationship of vector timestamps, i.e, 
-$(2, 0, 0) < (2, 2, 0)$.
+Since vector clocks maintain causality, we can redefine "past" and "future" in
+terms of vector clocks.  In the inconsistent checkpoint seen before, worker `P`
+had a "future event" $(2, 2, 0)$ in the checkpoint but worker `M` did not have a
+"past event" $(2, 0, 0)$ in the checkpoint. Past and future correspond to
+causality and not real-time; they are decided by $<$ relationship of vector
+timestamps, i.e, $(2, 0, 0) < (2, 2, 0)$.
 
 <img src="assets/figs/vc-inconsistent-cut.png" alt="Inconsistent cut" width="300"/>
 
@@ -179,10 +186,10 @@ is straightforward to distinguish messages sent before the checkpoint and the
 messages sent after the checkpoint.
 
 When a process receives a message with $c_{p+1} = d+1$ for the first time it
-checkpoints itself and updates its clock according to the usual time propagation
-mechanism. Therefore, all the future messages sent by it will have 
-$c_{p+1} = d + 1$. Checkpoint is created *before* processing the message the
-incoming message with $c_{p+1} = d + 1$
+checkpoints itself and updates its clock according to the usual vector time
+propagation mechanism. Therefore, all the future messages sent by it will have 
+$c_{p+1} = d + 1$. Checkpoint is created *before* processing the incoming
+message with $c_{p+1} = d + 1$
 
 But since messages may be delivered out-of-order, a process that had already
 checkpointed may receive $v_{p+1} = d$ messages. These messages need to be
@@ -203,14 +210,17 @@ checkpoint is complete!
 
 # Summary
 
-This is a general purpose asynchronous checkpointing scheme that is guaranteed
+We saw a general purpose asynchronous checkpointing scheme that is guaranteed
 to create consistent checkpoints. This scheme works for any distributed program
 (beyond just streaming computations). The algorithm works because:
 
 1. Vector clocks are isomorphic to causality, i.e, 
 $C(e_1) < C(e_2) \Leftrightarrow e_1 \rightarrow e_2$. 
 Because of this property and the timekeeping mechanism, we can judge if a message
-is from "past" (pre-checkpoint) or from "future" (post-checkpoint).
+is from "past" (pre-checkpoint) or from "future" (post-checkpoint). 
+  * First post-checkpoint message can be easily identified to initiate a
+    checkpoint. 
+  * In-flight pre-checkpoint messages can be easily identified and checkpointed.
 2. Timekeeping in vector clocks ensure that the process always has the maximum
 value for its own component. Checkpoint coordinator can safely increment its own
 component to request another checkpoint. No other worker can by itself increment
@@ -218,9 +228,9 @@ the clock component of checkpoint coordinator.
 3. Each worker never puts a "future" event in the checkpoint. When it receives a
 message from the future, it immediately creates a checkpoint before processing
 the message.
-4. In-flight pre-checkpoint messages can be easily identified using their vector
-timestamps and checkpointed.
 
 One of the most interesting part is that the consistent checkpointed state may
-actually have *never occurred* during the execution of the program! You can read
-[more about it here](https://github.com/codenet/public-notes/blob/main/paper-1989-vector-clock.md) and of course in the paper.
+actually have *never occurred* during the execution of the program! We saw an
+example of this. You can read [more about it
+here](https://github.com/codenet/public-notes/blob/main/paper-1989-vector-clock.md)
+and of course in the paper.
