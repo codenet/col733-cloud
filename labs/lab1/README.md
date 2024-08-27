@@ -17,7 +17,7 @@ workers would additionally use a distributed file system like HDFS or a blob
 store like S3.
 
 ## Part 0
-Familiarize yourself with [Redis](https://redis.io/).  You need `docker` and
+Familiarize yourself with [Redis](./redis). You need `docker` and
 `redis` installed for this.
 
 ```
@@ -30,7 +30,8 @@ familiarize yourself with [sorted sets](https://redis.io/commands/zadd/). You
 will use them to maintain word counts. You should also read about [redis
 streams](https://redis.io/docs/data-types/streams-tutorial/). You need the
 following redis stream commands for the first part: `xadd`, `xreadgroup`,
-`xcreate_group` and `xack`. Understand what they do.
+`xcreate_group` and `xack`. Understand what they do. Finally, you will need to
+write a Redis function for making your tasks idempotent.
 
 
 ## Part 1: Parallel execution
@@ -85,7 +86,7 @@ have to ensure two things:
 ## Part 3: Redis FT using checkpoints
 
 We would like to now ensure that our system tolerates Redis failures. We
-need not change the worker code for this lab. To reason about correctness, note
+need not change the worker code for this part. To reason about correctness, note
 that a Redis instance handles one command after another in a single thread.
 
 In this part, we will periodically create a checkpoint using

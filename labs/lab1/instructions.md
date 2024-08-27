@@ -1,11 +1,3 @@
-# COL733: Fundamentals of Cloud Computing
-
-### Semester I, 2024-2025
-
-### Lab-1: Fault tolerant word count
-
-### 6 August 2024
-
 # Submission Instructions
 
 1. You can **only** use Python, Pandas and Redis for this Lab. **Use of any other libraries** will lead to zero marks in the Lab.
@@ -116,8 +108,8 @@ When we unzip the submission then we should see the above files in the aforement
 python3 client.py
 ```
 
-- **_We will change the client.py and config.json files with appropriate values during evaluation. Therefore, do not change these files._**
-- **_The evaluation script will load the redis function. You need not write any code to load it. The evaluation script will use the command below to load the redis function from mylib.lua._**
+- We will change the client.py and config.json files with appropriate values during evaluation. Therefore, **_do not change these files._**
+- The evaluation script will load the redis function. You **_need not write any code to load it_**. The evaluation script will use the command below to load the redis function from mylib.lua.
 
 ```bash
 cat mylib.lua | redis-cli -x FUNCTION LOAD REPLACE
