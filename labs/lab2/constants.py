@@ -3,7 +3,7 @@ from typing import Final
 FNAME: Final[bytes] = b"fname"
 CHECKPOINT_INTERVAL : Final[float] = 0.5
 HEARTBEAT_INTERVAL: Final[float] = 0.5
-HEARTBEAT_TIMEOUT: Final[float] = 2
+HEARTBEAT_TIMEOUT: Final[float] = 1
 NUM_MAPPERS: Final[int] = 2
 NUM_REDUCERS: Final[int] = 2
 STREAMS: Final[list[bytes]] = [f"stream_{i}".encode() for i in range(NUM_MAPPERS)]
