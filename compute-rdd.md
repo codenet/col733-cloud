@@ -105,8 +105,7 @@ each RDD, driver knows its
 * list of dependencies i.e, lineage: which other partitions does this partition
   depend upon and the task to execute to get this partition from them.
 
-Let us see an example execution of a
-[PageRank](https://github.com/apache/spark/blob/master/examples/src/main/python/pagerank.py)
+Let us see an example execution of a [PageRank](./demos/spark.md)
 program written using Spark. PageRank measures the popularity of pages. 
 Given the following graph, one would expect 
 * u1 and u3 to have equal ranks,
