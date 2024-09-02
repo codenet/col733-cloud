@@ -19,6 +19,17 @@ from mylog import Logger
 
 logging = Logger().get_logger()
 
+
+def recvall(sock: socket.socket, length: int) -> bytes:
+    data = b''
+    while len(data) < length:
+        packet = sock.recv(length - len(data))
+        if not packet:
+            raise Exception("Connection closed before receiving the full message")
+        data += packet
+    return data
+
+
 @dataclass
 class ReducerState:
   pid: int
@@ -189,7 +200,7 @@ class Reducer(Process):
   def handle_mappers(self, client_socket: socket.socket, cmd_q: queue.Queue[Cmd], barrier: threading.Barrier):
     try:
       while True:
-        data = client_socket.recv(1024)
+        data = recvall(client_socket, 1024)
         if not data:
           break
         message = Message.deserialize(data)
