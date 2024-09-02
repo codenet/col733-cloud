@@ -8,3 +8,4 @@ For COL733: cloud computing technology fundamentals, taught at IIT Delhi.
 5. [Spark streaming](./compute-dstreams.md)
 6. [Asynchronous checkpointing using vector clocks](./compute-vc.md)
 7. [Flink](./compute-flink.md)
+8. [TensorFlow's Dataflow graph](compute-tf-graph)
