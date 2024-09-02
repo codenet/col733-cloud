@@ -25,7 +25,7 @@ def recvall(sock: socket.socket, length: int) -> bytes:
     while len(data) < length:
         packet = sock.recv(length - len(data))
         if not packet:
-            raise Exception("Connection closed before receiving the full message")
+            raise Exception("Connection closed")
         data += packet
     return data
 
