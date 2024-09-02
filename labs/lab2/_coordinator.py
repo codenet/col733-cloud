@@ -23,6 +23,7 @@ class Coordinator(Process):
     TEST_MAPPER = 'test_mapper'
     TEST_REDUCER = 'test_reducer'
     TEST_BOTH = 'test_both'
+    TEST_ALL = 'test_all'
 
     def __str__(self) -> str:
       return self.value
