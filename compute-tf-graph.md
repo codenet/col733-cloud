@@ -219,22 +219,26 @@ graph LR
 	w2[Write]
   
 	A:::hidden -.-> |GO| x1
-	x1 --o r1
 	C:::hidden ==> |A| a1
-	r1 ==> a1
-	a1 ==> w1
-	x3 --o w1
+	x1 --o r1
+	subgraph AssignAdd-2
+		r1 ==> a1
+		a1 ==> w1
+		x3 --o w1
+	end
 
 	B:::hidden -.-> |GO| x2
 	x2 --o r2
-	r2 ==> a2
 	D:::hidden ==> |B| a2
-	x4 --o w2
-	a2 ==> w2
+	subgraph AssignAdd-1
+		r2 ==> a2
+		a2 ==> w2
+		x4 --o w2
+	end
 
 	classDef hidden display: none;
 ```
 
 Starting from $x=X$, the possible outcomes are $x=\{X+A, X+B, X+A+B\}$.
-`AssignAdd` basically makes `Add`+`Write` as one *atomic operation*. Therefore,
-the possible outcome is only $x=X+A+B$.
+`AssignAdd` makes `Read`+`Add`+`Write` as one *atomic operation*. Therefore, the
+only possible outcome is $x=X+A+B$.
