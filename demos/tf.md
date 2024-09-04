@@ -1,11 +1,12 @@
 # TensorFlow Graph for Single Neuron ML Model
 
 ### Visualization on Tensorboard
-* Download the `demos/tf.py` file.
+* Download the `demos/tf.py` file
+* Install TensorFlow using `pip install tensorflow`
 * Clear any existing logs and run the tensorflow code: `rm -rf ./logs/ && python tf.py`
 
 * Run `tensorboard --logdir logs/single_neuron`
-* Open the TensorBoard URL in your browser to visualize.
+* Open the TensorBoard URL in your browser to visualize
 
 
 ### Walkthrough
