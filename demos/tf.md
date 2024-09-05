@@ -11,7 +11,7 @@
 
 ### Walkthrough
 
-* In this demo we are trying to replicate the example which is described [here](../compute-tf.md).
+* In this demo we are trying to replicate the example described [here](../compute-tf.md).
 
 * We used `2 GPUs (GPU:0, GPU:1)` and `1 CPU (CPU:0)` to run this code.
 
@@ -82,12 +82,18 @@ We get the following result when we visualize the tensorflow's dataflow graph on
 ![](../assets/figs/tf-tb-3.png)
 ![](../assets/figs/tf-tb-4.png)
 
-Here we can observe that `weight` and `x` goes as input to `MatMul` operator. The output of this operator and `bias` goes as input to the `add` operator. All this is done in `GPU:0` as can be seen through the legend.
+Here we can observe that `weight` and `x` goes as input to `MatMul` operator.
+The output of this operator and `bias` goes as input to the `add` operator. All
+this is done in `GPU:0` as can be seen through the legend.
 
 The operator with the activation function (relu) is present in `GPU:1`.
 
-The `sub` operator calculates the difference of `y (ground truth)` and output of activation function. Finally the `square` operator computes the sqaure of this vector. Remember, our error function was `tf.square(y_true - y_pred)`.
+The `sub` operator calculates the difference of `y (ground truth)` and output of
+activation function. Finally the `square` operator computes the sqaure of this
+vector. Remember, our error function was `tf.square(y_true - y_pred)`.
 
 Both the `sub` and `sqaure` operators are present in `CPU:0`.
 
-The `sgd` node (stochastic gradient descent) updates the model parameters based on the current gradient. This has control edges to other operators to start future iterations.
+The `sgd` node (stochastic gradient descent) updates the model parameters based
+on the current gradient. This has control edges to other operators to start
+future iterations.

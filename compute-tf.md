@@ -23,22 +23,26 @@ graph LR
 	Add ==> |l=wx+b| f
 	f ==> |"z=f(wx+b)"| error
 	y ==> error
-	error ==> |"(z-y)^2"| A:::hidden
+	error ==> |"e=(z-y)^2"| A:::hidden
 
 	classDef hidden display: none;
 ```
 
-All the functions in TensorFlow are *primitive* operators like multiplication
-and addition with known differentiations. TensorFlow can apply chain rule on the
+### Automatic differentiation
+
+All operators in TensorFlow are *primitive* like multiplication and addition
+with well-known differentiations. TensorFlow can apply chain rule on the
 dataflow graph to find gradients:
 
 $\frac{de}{db} = \frac{de}{dz}*\frac{dz}{dl}*\frac{dl}{db};\frac{de}{dw} = \frac{de}{dz}*\frac{dz}{dl}*\frac{dl}{dw}$
 
 $\frac{de}{db} = 2(z-y)*f'(l)*1;\frac{de}{dw} = 2(z-y)*f'(l)*x$
 
+$\frac{de}{dw} = \frac{de}{db}*x$
+
 Gradient calculation operators are auto-generated and added to the dataflow
 graph (highlighted in orange). Gradients are used to update model parameters $w$
-and $b$. `AssignAdd` has a control edge to `Read` to start next iteration.
+and $b$. 
 
 ```mermaid
 graph LR
@@ -50,8 +54,8 @@ graph LR
 
 	dedz["de/dz=2(z-y)"]:::autodiff
 	dzdl["dz/dl=f'"]:::autodiff
-	dedb[de/db]:::autodiff
-	dedw[de/dw]:::autodiff
+	dedb[de/db=Mul]:::autodiff
+	dedw[de/dw=Mul]:::autodiff
 	ba[AssignAdd]:::autodiff
 	wa[AssignAdd]:::autodiff
   w2["Var(w)"]:::autodiff
@@ -86,15 +90,25 @@ graph LR
 	classDef autodiff fill: orange;
 ```
 
+Notice that `AssignAdd` has a control edge to `Read` to start next iteration.
+Since, TensorFlow's dataflow graph allows mixing mutable variables with
+stateless operators, we can easily implement *synchronous training* by adding a
+queue to collect all the parameter updates before forwarding them to
+`AssignAdd`.
+
+### Heterogenous execution
 After preparing the unified dataflow graph, TensorFlow *lowers* the graph on
 available heterogenous devices. While lowering, operators using the same
 variable reference such as `Read` and `Assign-f` must come to the same *device*.
-Therefore, variable edges never cross device boundaries. If there is a data edge
-crossing device boundary, special `Send` and `Recv` operators are inserted.
-These operators have customized implementations for fast data transfer:
-`cudaMemCpyAsync` if workers are CPU/GPU on same machine, DMA to transfer
-between two GPUs on same machine, and TCP/RDMA for transfer between remote
-machines.
+In other words, variable edges never cross device boundaries. Doing so enables
+making `Assign-f`s and `Read`s to the same variable atomic without any
+additional synchronization.
+
+If there is a data edge crossing device boundary, special `Send` and `Recv`
+operators are inserted.  These operators have customized implementations for
+fast data transfer: `cudaMemCpyAsync` if workers are CPU/GPU on same machine,
+DMA to transfer between two GPUs on same machine, and TCP/RDMA for transfer
+between remote machines.
 
 ```mermaid
 graph LR
@@ -106,8 +120,8 @@ graph LR
 
 	dedz["de/dz=2(z-y)"]:::autodiff
 	dzdl["dz/dl=f'"]:::autodiff
-	dedb[de/db]:::autodiff
-	dedw[de/dw]:::autodiff
+	dedb[de/db=Mul]:::autodiff
+	dedw[de/dw=Mul]:::autodiff
 	ba[AssignAdd]:::autodiff
 	wa[AssignAdd]:::autodiff
   w2["Var(w)"]:::autodiff
@@ -132,6 +146,7 @@ graph LR
 	end
 
 	sm ==> rm
+	br ~~~ rm
 	sdedb ==> rdedb
 
 	subgraph Worker-2
@@ -159,3 +174,11 @@ graph LR
 	classDef sendrcv fill:cyan;
 ```
 
+For illustration, we have shown a single input `x` with a single ground truth
+`y` and they are read into two different workers.  In a real setting, there will
+be many more workers reading different batches of inputs $<x,y>$ and applying
+updates to model parameters $<w, b>$. This is what the paper calls *concurrent
+execution*: multiple subgraphs are running completely asynchronously with
+respect to each other.
+
+### Concurrent execution, FT, stragglers
