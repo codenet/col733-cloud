@@ -243,3 +243,5 @@ graph LR
 Starting from $x=X$, the possible outcomes are $x=\{X+A, X+B, X+A+B\}$.
 `AssignAdd` makes `Read`+`Add`+`Write` as one *atomic operation*. Therefore, the
 only possible outcome is $x=X+A+B$.
+
+Continued [here](./compute-tf.md).
