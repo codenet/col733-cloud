@@ -128,14 +128,18 @@ fires to output `3` on its output edges. `*` and `-` can now fire in any order.
 
 ```mermaid
 graph LR
-	A:::hidden -->|1| +
-	B:::hidden -->|2| +
-	+ --> *
-	C:::hidden -->|4| *
-	* --> E:::hidden
-	D:::hidden -->|7| -
-	+ --> -
-	- --> F:::hidden
+  Plus["+"]
+  Product["*"]
+  Minus["-"]
+
+	A:::hidden -->|1| Plus
+	B:::hidden -->|2| Plus
+	Plus --> Product
+	C:::hidden -->|4| Product
+	Product --> E:::hidden
+	D:::hidden -->|7| Minus
+	Plus --> Minus
+	Minus --> F:::hidden
 	classDef hidden display: none;
 ```
 
