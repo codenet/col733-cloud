@@ -75,11 +75,22 @@ However, to keep the size of lineage graphs manageable by the driver program,
 Spark only allows *coarse-grained* transformations. For example, multiply every
 number in RDD by 2. Coarse-grained transformations take a set of RDD partitions
 to generate a new RDD partition. Multiple workers apply the same transformation
-in parallel to generate different partitions of an RDD. 
+in parallel to generate different partitions of an RDD.  However, model training
+requires *fine-grained* transformations, i.e, every model parameter is nudged
+differently. If we try to store these fine-grained transformations in the
+lineage graph, the graph will explode. 
 
-However, model training requires *fine-grained* transformations, i.e, every
-model parameter is nudged differently. If we try to store these fine-grained
-transformations in the lineage graph, the graph will explode.
+We should instead try to store nudges and model parameters as two different
+RDDs.
+
+If we create new copies of these large RDDs at every nudge to fulfill the
+immutability requirement, it will not be memory efficient. But immutability is
+only at a conceptual level, we could overwrite the RDD partition and call it by
+its new name. 
+
+However, it can be more efficient to apply multiple nudges to different RDD
+partitions out-of-order as and when we receive them. Specifying this behaviour
+in Spark seems difficult.
 
 ### Parameter servers
 
