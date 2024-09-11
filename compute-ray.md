@@ -138,16 +138,23 @@ class F(object):
 	def square(self):
 		self.x = self.x*self.x
 		self.y = self.y*self.y
+	def get(self):
 		return self.x, self.y
 
 @ray.remote
-def g(f):
-	a, b = f.square.options(num_returns=2).remote()
-	return ray.get(a) + ray.get(b)
+def g(a, b):
+	return a + b
 
 f = F.remote(1, 3)
-x = g.remote(f)
-print(ray.get(x)) # 10
+f.square.remote()
+
+a1, b1 = f.get.options(num_returns=2).remote()
+x1 = g.remote(a1, b1)
+print(ray.get(x1)) # 10
+
+a2, b2 = f.get.options(num_returns=2).remote()
+x2 = g.remote(a2, b2)
+print(ray.get(x2)) # 10
 ```
 
 [Parameter servers](demos/ray_ps.py) can be easily specified with Ray. A
@@ -167,28 +174,48 @@ following shows the lineage graph:
 
 ```mermaid
 flowchart LR
+	c[(checkpoint)]
 	f["F.init"]
 	s["F.square"]
+	get1["F.get"]
+	get2["F.get"]
+	g1[g]
+	g2[g]
 
-	F(((F)))
-	a((a))
-	b((b))
-	x((x))
+	a1((a1))
+	b1((b1))
+	a2((a2))
+	b2((b2))
+	x1((x1))
+	x2((x2))
 
 	main -.-> f
-	main -.-> |control edge| g
+	main -.-> |control edge| g1
+	main -.-> g2
+	f ==> c
 
-	f --> F
-	F --> g
+	a1 --> g1
+	b1 --> g1
+	a2 --> g2
+	b2 --> g2
 
-	g -.-> s
 	f ==> |stateful edge| s
+	s ==> get1
+	get1 ==> get2
 
-	s --> |data edge| a
-	s --> b
+	get1 --> |data edge| a1
+	get1 --> b1
+	get2 --> a2
+	get2 --> b2
 	
-	g --> x
+	g1 --> x1
+	g2 --> x2
 ```
+
+In the above lineage graph, if we lose the Actor process holding `F`, we CANNOT
+just recover it from the checkpoint. Otherwise, we may observe `x1` being
+printed as 10 and `x2` being printed as 4. After recovering `F` from the
+checkpoint on a new Actor process, we also need to play its lineage forward.
 
 ## Execution
 
