@@ -45,15 +45,18 @@ tasks `f` and `g` and creates the following task dependency:
 
 ```mermaid
 flowchart LR
-  a["f(1)"]
-  b["f(3)"]
-  x["g"]
-  a --> x
-  b --> x
+	f1["f(1)"]
+	f3["f(3)"]
+	a((a))
+	b((b))
+	f1 --> a
+	f3 --> b
+	a --> g
+	b --> g
 ```
 
 Dynamic tasks and futures lets us specify arbitrary task dependencies more
-naturally. For example, [map reduce](demos/ray_mr.py) runs map-reduce using Ray.
+naturally. For example, [this](demos/ray_mr.py) runs map-reduce using Ray.
 We first specify 3 map tasks; each map task returns 3 futures (we had to tell
 Ray that the map task will return 3 futures using `.options`). 3 corresponding 
 futures from the map tasks are given to each reduce task.
@@ -129,21 +132,21 @@ ray.init()
 
 @ray.remote
 class F(object):
-	def __init__(self, x):
+	def __init__(self, x, y):
 		self.x = x
+		self.y = y
 	def square(self):
 		self.x = self.x*self.x
-	def get(self):
-		return self.x
+		self.y = self.y*self.y
+		return self.x, self.y
 
 @ray.remote
-def g(f1, f2):
-	f1.square.remote()
-	f2.square.remote()
-	return ray.get(f1.get.remote()) + ray.get(f2.get.remote())
+def g(f):
+	a, b = f.square.options(num_returns=2).remote()
+	return ray.get(a) + ray.get(b)
 
-fs = [F.remote(1), F.remote(3)]
-x = g.remote(fs[0], fs[1])
+f = F.remote(1, 3)
+x = g.remote(f)
 print(ray.get(x)) # 10
 ```
 
@@ -164,33 +167,26 @@ following shows the lineage graph:
 
 ```mermaid
 flowchart LR
-  fa["F(1)"]
-  fb["F(3)"]
-	sa[square]
-	sb[square]
-	ga[get]
-	gb[get]
+	f["F.init"]
+	s["F.square"]
 
+	F(((F)))
 	a((a))
 	b((b))
 	x((x))
 
-  fa --> g
-  fb --> g
+	main -.-> f
+	main -.-> |control edge| g
 
-	g -.-> sa
-	g -.-> sb
+	f --> F
+	F --> g
 
-	fa ==> sa
-	fb ==> sb
+	g -.-> s
+	f ==> |stateful edge| s
 
-	sa ==> ga
-	sb ==> gb
-
-	ga --> a
-	gb --> b
-	a --> x
-	b --> x
+	s --> |data edge| a
+	s --> b
+	
 	g --> x
 ```
 
