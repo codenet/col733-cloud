@@ -1,5 +1,15 @@
 # Ray
 
+- [Ray](#ray)
+	- [Tasks and futures](#tasks-and-futures)
+		- [A simple system for dynamic tasks and futures (CIEL \[NSDI'11\])](#a-simple-system-for-dynamic-tasks-and-futures-ciel-nsdi11)
+	- [Ray](#ray-1)
+		- [Execution](#execution)
+		- [Actors](#actors)
+		- [Fault tolerance](#fault-tolerance)
+- [Summary](#summary)
+
+
 So far, we saw systems where task dependencies are defined upfront and then
 executed. To do FT via lineage-based reexecution, lineage is managed by a single
 master program, therefore the tasks are kept *coarse-grained* to keep the
@@ -11,7 +21,7 @@ popular systems like Celery, AirFlow, and Dask support such a *work-pool* model.
 The simplest implementation (e.g., Celery) may have a single pool of work (a
 task queue) and stateless workers. Here, any worker can work on any task; tasks
 can be put into the queue at any time. Lab-1 implemented the work-pool model
-where clients added new tasks as files into a Redis streams; stateless workers
+where clients added new tasks as files into a Redis stream; stateless workers
 did word-count on files. This implementation was too simple: we would often want
 to give the output of one task to another task and to define complex
 dependencies like automatically start a new task when other two tasks complete.
@@ -84,8 +94,8 @@ tasks per second!
 ### A simple system for dynamic tasks and futures (CIEL [NSDI'11])
 
 We can have a bunch of workers, each containing an object store. Object stores
-will store immutable values for the futures. A master program keeps track of all
-the workers, tasks, and objects.
+will store immutable object values for the futures. A master program keeps track
+of all the workers, tasks, and objects.
 
 <img src="assets/figs/ciel-design.png" width=350>
 
@@ -106,7 +116,7 @@ $c(B, D)$| $B, D$ | Pending 				| $D$ | | $c(B, D)$
 Master schedules $a(z)$ on w0 (locality-aware). This produces $A$ in object
 store of w0. When w0 tells master about it, master can schedule $b(A)$ and
 $d(A)$ to workers w0 and w2 respectively. w2 downloads $A$ from w0 to run
-$d(A)$. This is again a careful separate of control-plane from data-plane;
+$d(A)$. This is again a careful separation of control-plane from data-plane;
 master never receives/sends the actual objects.
 
 <img src="assets/figs/ciel-objects.png" width=350>
@@ -116,13 +126,44 @@ recover lost objects. If w2 is unable to download $A$ from w0, it complains to
 master. Master will mark both $b(A)$ and $d(A)$ as pending and re-execute $a(z)$
 on w1. Therefore, tasks need to be deterministic and idempotent.
 
-Clearly, this approach will not scale to millions of tasks per second.
+Clearly, this approach will not scale to millions of tasks per second due to a
+single master.
 
 ## Ray
+
+### Execution
+
+Ray can start millions of millisecond-level tasks every second. Such
+fine-grained tasks bring two scalability challenges for the master program:
+
+1. the lineage graph that tracks dependencies between objects and tasks becomes
+much larger; and
+2. the scheduling decisions need to be made a lot more quickly.
+
+To solve these challenges, Ray shards master. 
+
+1. All the state is kept in a sharded Global Control Store (just replicated
+redis instances). This makes everything else (like the scheduler) stateless.
+
+<img src="assets/figs/ray-arch.png" width=350>
+
+2. To make fast scheduling decisions, Ray designs a bottom-up scheduler. Each
+node always tries to schedule the (stateless) tasks on itself. Only if the task 
+queue is beyond a threshold, the task is sent to the global scheduler that does
+locality-aware scheduling.
+
+<img src="assets/figs/ray-sched.png" width=350>
+
+
+Note that before an object leaves the object store of a node, its lineage needs
+to be persisted in the GCS so that it can be recovered via lineage-based
+reexecution.
+
+
 ### Actors
 
 In addition to stateless tasks, Ray supports stateful *actors* by marking
-classes as remote. Special processes are started as actors. Each class is 
+classes as `remote`. Special processes are started as actors. Each class is 
 resident on one such process. All method invocations on the actor class is
 executed in its corresponding process.
 
@@ -212,40 +253,13 @@ flowchart LR
 	g2 --> x2
 ```
 
-In the above lineage graph, if we lose the Actor process holding `F`, we CANNOT
-just recover it from the checkpoint. Otherwise, we may observe `x1` being
-printed as 10 and `x2` being printed as 4. After recovering `F` from the
-checkpoint on a new Actor process, we also need to play its lineage forward.
+In the above lineage graph, if we lose the Actor process holding `F`, after the
+first `g` finishes and prints `x1=10`, we CANNOT just recover `F` from the
+checkpoint. Otherwise, we may observe `x1` being printed as 10 and `x2` being
+printed as 4. After recovering `F` from the checkpoint on a new Actor process,
+we must play its lineage forward.
 
-## Execution
-
-Ray can start millions of millisecond-level tasks every second. Such
-fine-grained tasks bring two scalability challenges for the master program:
-
-1. the lineage graph that tracks dependencies between objects and tasks becomes
-much larger; and
-2. the scheduling decisions need to be made a lot more quickly.
-
-To solve these challenges, Ray shards master. 
-
-1. All the state is kept in a sharded Global Control Store (just a replicated
-redis instances). This makes everything else (like the scheduler) stateless.
-
-<img src="assets/figs/ray-arch.png" width=350>
-
-2. To make fast scheduling decisions, Ray designs a bottom-up scheduler. Each
-node always tries to schedule the (stateless) tasks on itself. Only if the task 
-queue is beyond a threshold, the task is sent to the global scheduler that does
-locality-aware scheduling.
-
-<img src="assets/figs/ray-sched.png" width=350>
-
-
-Note that before an object leaves the object store of a node, its lineage needs
-to be persisted in the GCS so that it can be recovered via lineage-based
-reexecution.
-
-## Summary
+# Summary
 
 Ray is one of the latest successful distributed compute system, already widely
 used in the industry. It does not force programmers to use map/reduce/join-type

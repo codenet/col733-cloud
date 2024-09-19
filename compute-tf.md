@@ -1,5 +1,13 @@
 # TensorFlow
 
+- [TensorFlow](#tensorflow)
+	- [Automatic differentiation](#automatic-differentiation)
+	- [Heterogenous execution](#heterogenous-execution)
+	- [Concurrent execution](#concurrent-execution)
+	- [Fault Tolerance](#fault-tolerance)
+- [Summary](#summary)
+
+
 Let us now build the TensorFlow's dataflow graph for a very simple
 *single-layer* ML model training task. Let us say we have an ML model with one
 layer that repeatedly takes a single input vector $x$ and outputs a single
@@ -28,7 +36,7 @@ graph LR
 	classDef hidden display: none;
 ```
 
-### Automatic differentiation
+## Automatic differentiation
 
 All operators in TensorFlow are *primitive* like multiplication and addition
 with well-known differentiations. TensorFlow can apply chain rule on the
@@ -92,7 +100,7 @@ graph LR
 
 Notice that `AssignAdd` has a control edge to `Read` to start next iteration.
 
-### Heterogenous execution
+## Heterogenous execution
 After preparing the unified dataflow graph, TensorFlow *lowers* the graph on
 available heterogenous devices. While lowering, operators using the same
 variable reference such as `Read` and `Assign-f` must come to the same *device*.
@@ -170,7 +178,7 @@ graph LR
 	classDef sendrcv fill:cyan;
 ```
 
-### Concurrent execution
+## Concurrent execution
 For illustration, we have shown a single input `x` with a single ground truth
 `y` and the same input is read repeatedly into two different workers.  In a real
 setting, there will be many more workers reading different shuffled batches of
@@ -215,7 +223,7 @@ consistency*. It is ok to miss model parameter nudges from some workers.
 
 <img src="assets/figs/tf-backup.png" width=250>
 
-### Fault Tolerance
+## Fault Tolerance
 
 If a stateless worker, processing an input batch, crashes, we can easily
 replace it by another worker. Doing FT for stateful workers holding model
@@ -325,7 +333,7 @@ graph LR
 	classDef checkpoint fill:lightgreen;
 ```
 
-## Summary
+# Summary
 
 At the time of training, ML model parameters require fine-grained updates unlike
 Spark's coarse-grained transformations. Parameter servers create a strict

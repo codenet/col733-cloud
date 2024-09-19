@@ -1,5 +1,15 @@
 # TensorFlow
 
+- [TensorFlow](#tensorflow)
+	- [Background](#background)
+	- [Difficulties with existing systems](#difficulties-with-existing-systems)
+		- [Spark](#spark)
+		- [Parameter servers](#parameter-servers)
+	- [TensorFlow](#tensorflow-1)
+		- [Dataflow graphs](#dataflow-graphs)
+		- [Unified dataflow graph in TensorFlow](#unified-dataflow-graph-in-tensorflow)
+
+
 TensorFlow is a distributed system for doing large-scale machine learning.
 We are interested in studying this because:
 

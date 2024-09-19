@@ -1,12 +1,17 @@
-# Introduction
+# What is cloud?
 
-## What is cloud?
+- [What is cloud?](#what-is-cloud)
+	- [Why cloud?](#why-cloud)
+	- [Distributed computation](#distributed-computation)
+	- [Virtualization](#virtualization)
+	- [Distributed storage](#distributed-storage)
+
 
 Cloud is a collection of resources like storage, network, and compute; and
 services like pre-built applications, frameworks, and libraries like Google
 photos and databases. Cloud offer a flexible "pay-as-you-go" model to its users.
 
-### Why cloud?
+## Why cloud?
 
 As software developers, we just want to focus on developing software. We don't 
 want to **manage resources** since managing resources is extremely boring. Let
@@ -82,7 +87,7 @@ There are three topics that we cover
 * Virtualization
 * Distributed storage
 
-## Why distributed computation?
+## Distributed computation
 
 You might want to spread your program onto multiple machines if you require
 lower runtime than what is possible with one machine. Programs on a single

@@ -1,5 +1,10 @@
 # Streaming computation
 
+- [Streaming computation](#streaming-computation)
+  - [Some approaches to handle stateful tasks](#some-approaches-to-handle-stateful-tasks)
+  - [Discretized streams](#discretized-streams)
+  - [Summary](#summary)
+
 So far, we have learned "batch computation" where we had lots of data that we
 wanted to process quicker than the runtimes possible with a single machine.
 Batch jobs typically run for hours before producing a result. There is interest
