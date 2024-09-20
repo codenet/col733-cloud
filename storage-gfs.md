@@ -100,7 +100,9 @@ consistent but still useable.
 random reads and writes. Imagine crawlers appending their logs in one multi-TB
 file and then page rank application reading the crawler log file.
 * The paper has masters and chunkservers (analogous to MapReduce workers). In
-GFS, master is also FT.
+GFS, master is also FT. Unlike MapReduce, GFS puts efforts into making master
+FT. The main reason is that GFS master is responsible for its files *forever*
+whereas MapReduce master is only responsible only for the duration of the job.
 
 ## GFS design
 
@@ -110,8 +112,9 @@ sequential reads and writes. Files are broken into chunks (analogous to disk
 blocks (4KB)/extents in regular file systems) and GFS chooses a large chunk size
 of 64MB. Each chunk has a unique identifier called *chunk handle*. Chunks are
 spread across *chunkservers* which store each chunk as just a regular file in
-their local file system. For each file, master maintains a list of chunks and
-the chunkservers holding each chunk. Large chunk size reduces master metadata.
+their local file system. For each GFS file, master maintains a list of chunks
+and the chunkservers holding each chunk. Large chunk size reduces master
+metadata.
 
 Applications are linked with a GFS client library. When an application wants to 
 read/write a file, the library takes the file offset and asks master for the
@@ -226,11 +229,11 @@ check with the master about the new chunkservers of "abc".
 
 <img width=350 src="assets/figs/gfs-reject-writes.png">
 
-### Fault tolerance of master
+Are version numbers still required if we are using lease? Yes! We shouldn't
+assume anything about the network delays. It is possible that an older append
+request from CS1 arrives at CS3 even after CS1's lease has expired.
 
-Unlike MapReduce, GFS puts efforts into making master FT. The main reason is
-that GFS master is responsible for its files *forever* whereas MapReduce master 
-is only responsible only for the duration of the job.
+### Fault tolerance of master
 
 GFS master is maintaining the following state. Each state is marked with (v) for
 volatile or (nv) for non-volatile.
