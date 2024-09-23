@@ -1,5 +1,15 @@
 # Asynchronous checkpointing
 
+- [Asynchronous checkpointing](#asynchronous-checkpointing)
+  - [Clock drifts](#clock-drifts)
+    - [Network Time Protocol](#network-time-protocol)
+    - [Impact of clock drifts](#impact-of-clock-drifts)
+  - [Consistent Checkpoints](#consistent-checkpoints)
+  - [Vector clocks](#vector-clocks)
+  - [Checkpointing algorithm](#checkpointing-algorithm)
+- [Summary](#summary)
+
+
 Continuous operator model provided good freshness in the common case but because
 of its stateful workers, fault tolerance mechanism of rerunning tasks on another
 worker no longer works. Spark streaming removes state from workers by

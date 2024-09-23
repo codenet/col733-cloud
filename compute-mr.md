@@ -1,6 +1,16 @@
 # MapReduce
 
-### Context
+- [MapReduce](#mapreduce)
+	- [Context](#context)
+	- [Programming model](#programming-model)
+	- [Execution](#execution)
+	- [Analysis](#analysis)
+	- [Fault tolerance](#fault-tolerance)
+	- [Evaluation](#evaluation)
+- [Summary](#summary)
+
+
+## Context
 POSIX threads became a standard in 1995; OpenMP became a standard in 1997. But
 doing parallel programming remained hard. Programmer has to worry about
 efficiently using available processors, locking to prevent race conditions,
@@ -32,7 +42,7 @@ amounts of complex code to deal with these issues.
 This paper tries to take away all this headache away from the programmer by
 providing a different programming model.
 
-## MapReduce
+## Programming model
 
 MapReduce takes just two functions from the programmer: a `map` and a `reduce`.
 For example, to count the occurence of each word in a large number of webpages

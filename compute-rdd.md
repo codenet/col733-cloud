@@ -1,5 +1,13 @@
 # Resilient Distributed Datasets in Spark
 
+- [Resilient Distributed Datasets in Spark](#resilient-distributed-datasets-in-spark)
+	- [Overview](#overview)
+	- [Resilient distributed datasets](#resilient-distributed-datasets)
+	- [Execution](#execution)
+		- [Evaluation](#evaluation)
+- [Summary](#summary)
+
+
 ## Overview
 Spark will do *asynchronous checkpointing* of its state, i.e, create a
 checkpoint without pausing the program for fault tolerance. It will also try to
@@ -278,7 +286,7 @@ Figure 7 shows that later iterations of Spark are much faster than in Hadoop
 In Figure 11, authors inject a fault in iteration 6. Iteration 6 takes longer
 time than other iterations due to the recovery via lineage-based reexecution.
 
-## Summary
+# Summary
 
 DSM allows arbitrary fine-grained updates. It has to deal with consistency
 issues stemming from multiple readers and writers. The checkpoints are expensive
