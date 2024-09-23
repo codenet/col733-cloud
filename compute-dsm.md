@@ -1,5 +1,18 @@
 # Distributed shared memory
 
+- [Distributed shared memory](#distributed-shared-memory)
+	- [A quick primer on demand paging](#a-quick-primer-on-demand-paging)
+	- [Paging-based DSM](#paging-based-dsm)
+	- [Problems with DSM](#problems-with-dsm)
+		- [Memory coherence](#memory-coherence)
+		- [False sharing](#false-sharing)
+		- [Locating the page](#locating-the-page)
+	- [Fault and stragglers](#fault-and-stragglers)
+		- [Checkpointing](#checkpointing)
+		- [Replication](#replication)
+	- [Summary](#summary)
+
+
 DSM implementations were the early attempts to do distributed computation as we
 realized that Moore's law will not be forever. We could pack multiple CPUs
 within a single machine but the number of CPUs we can pack will be limited as
@@ -15,7 +28,7 @@ be implemented very easily without requiring any new hardware support and
 without modifying existing programs. Some of you can implement it as a course
 project :-)
 
-### A quick primer on demand paging
+## A quick primer on demand paging
 
 Read-write requests originating from CPUs contain virtual addresses. Virtual
 addresses are of the form [virtual page number, offset]. Virtual page number is
@@ -35,7 +48,7 @@ and updates PTE. When we return from the page fault handler, the hardware retrie
 the faulting instruction and this time it finds the present bit set and can find
 the PPN to translate the virtual address.
 
-### Paging-based DSM
+## Paging-based DSM
 
 We can easily extend demand paging to realize a paging-based DSM: page fault 
 handler can bring the page from a remote machine instead of from disk. To bring
@@ -65,7 +78,7 @@ closer to computation.
 
 Unfortunately, there are serious issues with DSM.
 
-# Problems with DSM
+## Problems with DSM
 
 ### Memory coherence
 

@@ -1,5 +1,15 @@
 # TensorFlow
 
+- [TensorFlow](#tensorflow)
+	- [Background](#background)
+	- [Difficulties with existing systems](#difficulties-with-existing-systems)
+		- [Spark](#spark)
+		- [Parameter servers](#parameter-servers)
+	- [TensorFlow](#tensorflow-1)
+		- [Dataflow graphs](#dataflow-graphs)
+		- [Unified dataflow graph in TensorFlow](#unified-dataflow-graph-in-tensorflow)
+
+
 TensorFlow is a distributed system for doing large-scale machine learning.
 We are interested in studying this because:
 
@@ -9,7 +19,7 @@ Spark and MapReduce, are ill-suited for it. We will understand why.
 2. ML is statistical in nature. This can be exploited in fault tolerance and
 straggler mitigation strategies.
 3. ML workloads use heterogenous compute: CPUs, GPUs, TPUs, and other
-accelerators. TensorFlow is a good system design for seamlessly managing diverge
+accelerators. TensorFlow is a good system design for seamlessly managing diverse
 hardware.
 
 ## Background
@@ -20,11 +30,12 @@ images of size 30x30, i.e, there are 900 pixels each with value 0 (black) or 1
 layer and 10 neurons in the output layer (one for each digit). In between input
 and output layers there can be other layers. 
 
-A neuron can take inputs $x_1, x_2, \cdots, x_n$ from other neurons and applies
-a non-linear function to produce an output $y$ between 0 and 1, i.e,
-$y = F(w_1*x_1 + w_2*x_2 + \cdots w_n*x_n + b)$. This output will become the
-input for neurons in the next layer. Variables $<b, w_1, w_2, \cdots w_n>$ are
-called model *parameteres*. These are what we are interested in learning.
+A neuron takes inputs $x_1, x_2, \cdots, x_n$ from other neurons and applies
+a non-linear function (such as sigmoid or tanh) to produce an output $y$ between
+0 and 1, i.e, $y = F(w_1*x_1 + w_2*x_2 + \cdots w_n*x_n + b)$. This output will
+become the input for neurons in the next layer. Variables 
+$<b, w_1, w_2, \cdots w_n>$ are called model *parameteres*. These are what we
+are interested in learning.
 
 The training process uses training data. For our example, the training data will
 have many grayscale 30x30 digit images. For each image, the training data also
@@ -51,7 +62,7 @@ model parameter.
 
 <img src="assets/figs/tf-descent.png" alt="Gradient Descent" width="200"/>
 
-In 2012's ImageNet challenge, the task was similar: given an image identify its
+In 2012's ImageNet challenge, the task was similar: given an image, identify its
 class. The classes were more diverse than just digits: cats, dogs, etc. The
 winninig entry AlexNet was trained using a GPU and had 62M+ model parameters!
 AlexNet significantly outperformed all other models. This gave rise to *deep
@@ -74,11 +85,22 @@ However, to keep the size of lineage graphs manageable by the driver program,
 Spark only allows *coarse-grained* transformations. For example, multiply every
 number in RDD by 2. Coarse-grained transformations take a set of RDD partitions
 to generate a new RDD partition. Multiple workers apply the same transformation
-in parallel to generate different partitions of an RDD. 
+in parallel to generate different partitions of an RDD.  However, model training
+requires *fine-grained* transformations, i.e, every model parameter is nudged
+differently. If we try to store these fine-grained transformations in the
+lineage graph, the graph will explode. 
 
-However, model training requires *fine-grained* transformations, i.e, every
-model parameter is nudged differently. If we try to store these fine-grained
-transformations in the lineage graph, the graph will explode.
+We should instead try to store nudges and model parameters as two different
+RDDs.
+
+If we create new copies of these large RDDs at every nudge to fulfill the
+immutability requirement, it will not be memory efficient. But immutability is
+only at a conceptual level, we could overwrite the RDD partition and call it by
+its new name. 
+
+However, it can be more efficient to apply multiple nudges to different RDD
+partitions out-of-order as and when we receive them. Specifying this behaviour
+in Spark seems difficult.
 
 ### Parameter servers
 
@@ -87,7 +109,7 @@ This is the reason why Spark workers were able to simply re-execute failed
 tasks. Another popular approach for ML training at the time was to introduce
 special *parameter servers* to manage state (ML model parameters).  Other
 stateless workers are given different portions of the training data in each
-*epoch*. Each worker 
+*epoch*. Each stateless worker 
 
 1. reads parameters from parameter servers;
 2. compute error for its own portion of training data;
@@ -106,41 +128,45 @@ workers may have already changed $p$ to $p'$. Because of the statistical nature
 of ML training, an asynchronous version still works. It hurts the *learning
 rate* but removes the barrier thereby reducing idling workers.
 
-However, such a stateful<>stateless split may not be desirable. For example, if
-we want to divide every parameter by 2, it is better to be able to send the
-compute to the parameter server instead of downloading all parameters to
-stateless workers, dividing by 2, and then sending results back. 
+However, such a rigid stateful<>stateless split may not be desirable. For
+example, if we want to divide every parameter by 2, it is better to be able to
+send the compute to the parameter server instead of downloading all parameters
+to stateless workers, dividing by 2, and then sending results back. 
 
 ## TensorFlow
 TensorFlow does not create an upfront stateful/stateless separation. It works
 with a *unified dataflow graph* that captures both mutable state (for model
-parameters) and computation. Let us now understand this dataflow graph.
+parameters) and computation. Let us first understand dataflow graphs.
 
 ### Dataflow graphs
 A dataflow graph captures data dependencies between operators. Each operator has
 some input and some output edges. An operator can run (also called, can *fire*)
 if all its input edges have data. When an operator fires, it runs *atomically*
 and puts its output on its output edges, making downstream operators *ready* to
-fire. The order in which two ready operators can fire is not specified. For
-example, in the following dataflow graph, first `+` fires to output `3` on its
-output edges. `*` and `-` can now fire in any order.
+fire. The order in which two ready operators can fire is not specified thereby
+encouraging parallelism. For example, in the following dataflow graph, first `+`
+fires to output `3` on its output edges. `*` and `-` can now fire in any order.
 
 ```mermaid
 graph LR
-	A:::hidden -->|1| +
-	B:::hidden -->|2| +
-	+ --> *
-	C:::hidden -->|4| *
-	* --> E:::hidden
-	D:::hidden -->|7| -
-	+ --> -
-	- --> F:::hidden
+  Plus["+"]
+  Product["*"]
+  Minus["-"]
+
+	A:::hidden -->|1| Plus
+	B:::hidden -->|2| Plus
+	Plus --> Product
+	C:::hidden -->|4| Product
+	Product --> E:::hidden
+	D:::hidden -->|7| Minus
+	Plus --> Minus
+	Minus --> F:::hidden
 	classDef hidden display: none;
 ```
 
 ### Unified dataflow graph in TensorFlow
-In TensorFlow, data flowing on edges are tensors. TensorFlow adds mutable state
-into its dataflow graph. TF graph has four types of operators:
+In TensorFlow, data flowing on edges are tensors. TensorFlow adds *mutable
+state* into its dataflow graph. TF graph has four types of operators:
 
 1. Stateless operators that take `k` tensors and output `l` tensors. An example
 is matrix multiplication.
@@ -154,7 +180,8 @@ graph LR
 	classDef hidden display: none;
 ```
 
-2. Variable operators that return a reference to the variable.
+2. Variable operators that return a reference to the variable. In ML training,
+variables are model parameters.
 ```mermaid
 graph LR
   x["Var(x)"]
@@ -202,8 +229,7 @@ graph LR
 
 The advantage of `AssignF` operators instead of a `Write` operator is that it
 allows for skipping control edges between `AssignF` operators (if `F` is
-commutative). Skipping control edges means opportunities for more parallelism.
-Consider the following graph:
+commutative). Consider the following graph:
 
 ```mermaid
 graph LR
@@ -219,22 +245,28 @@ graph LR
 	w2[Write]
   
 	A:::hidden -.-> |GO| x1
-	x1 --o r1
 	C:::hidden ==> |A| a1
-	r1 ==> a1
-	a1 ==> w1
 	x3 --o w1
+	subgraph AssignAdd-2
+		x1 --o r1
+		r1 ==> a1
+		a1 ==> w1
+	end
 
 	B:::hidden -.-> |GO| x2
-	x2 --o r2
-	r2 ==> a2
+	subgraph AssignAdd-1
+		x2 --o r2
+		r2 ==> a2
+		a2 ==> w2
+	end
 	D:::hidden ==> |B| a2
 	x4 --o w2
-	a2 ==> w2
 
 	classDef hidden display: none;
 ```
 
 Starting from $x=X$, the possible outcomes are $x=\{X+A, X+B, X+A+B\}$.
-`AssignAdd` basically makes `Add`+`Write` as one *atomic operation*. Therefore,
-the possible outcome is only $x=X+A+B$.
+`AssignAdd` makes `Read`+`Add`+`Write` as one *atomic operation*. Therefore, the
+only possible outcome is $x=X+A+B$.
+
+Continued [here](./compute-tf.md).
