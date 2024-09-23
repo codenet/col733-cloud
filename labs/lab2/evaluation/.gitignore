@@ -1,0 +1,5 @@
+csv_files/
+submissions/
+checkpoints/
+app.log
+mycache/
