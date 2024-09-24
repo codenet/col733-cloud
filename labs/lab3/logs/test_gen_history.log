@@ -1,0 +1,40 @@
+16:37:02 INFO worker_0 Setting key = 0
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_1 Get key = 0
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_0 Set key = 0
+16:37:02 INFO worker_1 Get key = 0
+16:37:02 INFO worker_0 Setting key = 1
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_1 Get key = 0
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_1 Get key = 0
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_0 Set key = 1
+16:37:02 INFO worker_0 Setting key = 2
+16:37:02 INFO worker_1 Get key = 1
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_1 Get key = 1
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_1 Get key = 2
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_0 Set key = 2
+16:37:02 INFO worker_0 Setting key = 3
+16:37:02 INFO worker_1 Get key = 2
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_1 Get key = 2
+16:37:02 INFO worker_1 Getting key
+16:37:02 INFO worker_1 Get key = 3
+16:37:02 INFO worker_0 Set key = 3
+16:37:02 INFO worker_0 Setting key = 4
+16:37:02 INFO worker_0 Set key = 4
+16:37:02 INFO worker_0 Setting key = 5
+16:37:02 INFO worker_0 Set key = 5
+16:37:02 INFO worker_0 Setting key = 6
+16:37:02 INFO worker_0 Set key = 6
+16:37:02 INFO worker_0 Setting key = 7
+16:37:02 INFO worker_0 Set key = 7
+16:37:02 INFO worker_0 Setting key = 8
+16:37:02 INFO worker_0 Set key = 8
+16:37:02 INFO worker_0 Setting key = 9
+16:37:02 INFO worker_0 Set key = 9
