@@ -17,3 +17,4 @@ For COL733: cloud computing technology fundamentals, taught at IIT Delhi.
 
 ### Distributed storage
 1. [Google File System](./storage-gfs.md)
+2. [Chain Replication with Apportioned Queries](./storage-craq.md)
