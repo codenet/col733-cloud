@@ -1,5 +1,14 @@
 # Chain Replication with Apportioned Queries
 
+- [Chain Replication with Apportioned Queries](#chain-replication-with-apportioned-queries)
+	- [Linearizability](#linearizability)
+		- [Safety and liveness](#safety-and-liveness)
+	- [Chain Replication](#chain-replication)
+	- [CRAQ design](#craq-design)
+	- [Performance](#performance)
+- [Summary](#summary)
+
+
 CRAQ's goals are different from GFS. Here, we are interested in building a
 key-value store where all the data fits in memory of a single server. But of
 course, we will do replication for fault-tolerance. Unlike GFS's large files
@@ -79,10 +88,8 @@ system) simply removes the node from the chain. The requests that were in-flight
 are retried by the clients.
 
 Why is this correct? Let us say initially x=0 and Wx1 was in-flight. It was seen
-by the tail, but head could not acknowledge it to the client since someone in
-the chain crashed. Now let us further say tail responded to another client with
-Rx1 and crashed. After fault recovery, can the system respond with Rx0 (without
-any other Wx in flight).
+by the tail which responded to another client with Rx1 and crashed. After fault
+recovery, can the system respond with Rx0 (without any other Wx in flight).
 
 This is not possible. Since all writes are flowing from head to tail, any write
 request that was received by the tail, such as Wx1 above, was seen by *all*
@@ -104,8 +111,8 @@ I-Q: S3 -> S1 -> S2
 R-Z: S2 -> S3 -> S1
 ```
 
-For example, reads to the key `M` will be serviced by S2; reads to the key `R`
-will be serviced by S1.
+In the above setup, reads to the key `M` will be serviced by S2; reads to the
+key `R` will be serviced by S1.
 
 ## CRAQ design
 
@@ -113,8 +120,8 @@ The above sharding was possible only because we were providing a get/set
 interface for just single keys: each key is being get/set independently.
 However, we may be interested in setting multiple keys together in a
 "mini-transaction" such as atomically write `M=10, R=20` like in a bank account
-transfer. If `M` and `R` flow through two different chains, it makes atomicity
-complicated.
+transfer. Both writes should be visible together. If `M` and `R` flow through
+two different chains, it makes atomicity complicated.
 
 The idea of CRAQ is that we can improve read throughput of a single chain by
 allowing reads from *non-tail* servers. The difficulty is that we want to
@@ -125,10 +132,85 @@ request flows through a server, it writes the key's value at the next version.
 This value is currently *dirty*. We have not seen acknowledgement back from the
 tail. When we see a write acknowledgement back from the tail, we can delete all
 the older versions of the key and mark the acknowledged version *clean*. Tail
-never has dirty version of keys.
+never has dirty version of keys. Following shows an example. Initial value 
+`x=0` was recorded at version `39`. There are two inflight writes: `x=1` is
+written at version `40`, and `x=2` is written at version `41`. When a server
+receives an acknowledgement of version 40, it deletes version `39` and marks
+version `40` as clean.
 
-To service read request, if a server only has one clean version (that means
+<img width=350 src="assets/figs/craq-versions.png">
+
+To service a read request, if a server only has one clean version (that means
 there are no in-flight writes downstream), it can directly respond with the
-clean version. Otherwise, it asks the tail about its version and responds with
-that version. Because of this check with the tail, the system is again
-linearizable.
+clean version. In the above example, `C` can directly respond `x=1` to `C2`
+since it only has version `40` for `x`. It is sure that tail has seen `x=1` and
+that the tail can not have seen a newer value of `x`.
+
+However, if the read request goes to say `B`; `B` does not know which version
+has tail seen. What shall we do then?
+
+Option 1: serve latest version? This can break linearizability. `C` has no idea
+about `x=2` so it is still returning `x=1`.
+
+```
+C0 (inflight write): |-- Wx2 ---
+C1 (served by B)   :   |-Rx2-|
+C2 (served by C)   :          |-Rx1-|
+```
+
+Option 2: serve latest clean version? This can also break linearizability. 
+`B` does not know that `D` have actually already seen `x=2`.
+
+```
+C0 (inflight write): |-- Wx2 ---
+C1 (served by B)   :         |-Rx1-|
+C2 (served by D)   :  |-Rx2-|
+```
+
+If a server has dirty versions at the time of reads, CRAQ's solution is to ask
+the tail about its version. Then, reply to the client with that version.
+
+<img width=350 src="assets/figs/craq-asks-tail.png">
+
+It is still linearizable as when the tail applies writes, responds to
+read/version requests forms linearizable points.
+
+## Performance
+
+The table in Figure 5 shows that the read throughput increases linearly with
+increasing the chain size. This is because all servers are able to answer read
+requests. Test-and-set is much slower since it can have only one outstanding
+write for a given key. This shows that pipelining multiple writes (by keeping
+versions) down the chain significantly improves write throughput.
+
+Figure 6 interestingly shows that even when we increase writes, CRAQ is able to
+provide better read throughput than CR. This is surprising since when we
+increase writes, non-tail servers may always have dirty versions during reads,
+requiring a version check with the tail. In other words, all read requests might
+still involve the tail. The reason for improved throughput is that the tail is
+only responding with *version numbers* and not with full objects. If objects 
+were small, we would not see such a read throughput improvement.
+
+# Summary
+
+CR and CRAQ are simple techniques for providing linearizability.
+Linearizability is strong consistency: the storage system behaves *as if* it was
+running on a single server. CR/CRAQ are widely used by industry, e.g.,
+[Facebook](https://engineering.fb.com/2022/05/04/data-infrastructure/delta/) and
+[MongoDB](https://www.mongodb.com/docs/manual/tutorial/manage-chained-replication/).
+
+If we think beyond key-value stores with just get/set operations, chain
+replication is actually implementing *replicated state machines* where we treat
+each server as a *deterministic* state machine. With chain replication, we are
+ensuring that each server applies transformations in the *same order*. Since,
+the state machine is deterministic, all servers will follow the same state
+transitions (with later servers slightly lagging behind the earlier servers).
+
+For example, if our storage servers were Redis servers, we could send all Redis
+commands, such as Redis functions, through the chain. Doing so easily replicates
+Redis servers. [Ray](compute-ray.md) uses CR for its Global Control Store, built
+on top of Redis.
+
+Later in the course, we will see Raft that also replicates a log to build 
+replicated state machines. Raft will have automatic fault tolerance, unlike
+CR/CRAQ where a third-party FT system needs to remove servers from the chain.
