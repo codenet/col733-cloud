@@ -1,7 +1,7 @@
 import socket
 from typing import Optional, Final
 
-from core.logger import network_logger, client_logger
+from core.logger import network_logger
 from core.server import ServerInfo
 from core.message import JsonMessage
 from core.socket_helpers import STATUS_CODE, recv_message
@@ -10,7 +10,7 @@ from core.socket_helpers import STATUS_CODE, recv_message
 class TcpClient:
   def __init__(self, info: ServerInfo, blocking: bool = True, sock_pool_sz: int = 1) -> None:
     self._info = info
-    self._logger = client_logger
+    self._logger = network_logger
     self._blocking: Final[bool] = blocking
     self._client_sockets: Optional[list[socket.socket]] = None
     self._sock_pool_sz: Final[int] = sock_pool_sz

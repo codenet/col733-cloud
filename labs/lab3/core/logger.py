@@ -12,7 +12,7 @@ logger.add(
   format=_server_fmt,
   level=INFO)
 
-_client_fmt = "<green>{time:HH:mm:ss}</green> <blue>{level}</blue> <cyan>{extra[server_name]}</cyan> {message}"
+_client_fmt = "<green>{time:HH:mm:ss}</green> <blue>{level}</blue> <cyan>{thread.name} {extra[server_name]}</cyan> {message}"
 logger.add(sys.stdout,
     # "logs/client.log",
            format=_client_fmt,
