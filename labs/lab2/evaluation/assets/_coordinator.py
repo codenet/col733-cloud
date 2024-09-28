@@ -20,7 +20,8 @@ logging = Logger().get_logger()
 class Coordinator(Process):
   class RecoveryTestModes(Enum):
     TEST_NONE = 'none'
-    TEST_ONCE = 'once'
+    TEST_MAPPER_ONCE = 'mapper_once'
+    TEST_REDUCER_ONCE = 'reducer_once'
     TEST_MAPPER = 'test_mapper'
     TEST_REDUCER = 'test_reducer'
     TEST_BOTH = 'test_both'
@@ -78,23 +79,27 @@ class Coordinator(Process):
     st.start()
     rt.start()
 
-    if self.RecoveryTestModes.TEST_ONCE:
+    if self._recovery_test_mode == self.RecoveryTestModes.TEST_MAPPER_ONCE:
       time.sleep(3)
       self.kill_worker(id=f"Mapper_0")
   
+    elif self._recovery_test_mode == self.RecoveryTestModes.TEST_REDUCER_ONCE:
+      time.sleep(3)
+      self.kill_worker(id=f"Reducer_0")
+
     elif self._recovery_test_mode == self.RecoveryTestModes.TEST_REDUCER:
       while True:
-        time.sleep(3)
+        time.sleep(4)
         self.kill_worker(id=f"Reducer_{random.randrange(0, NUM_REDUCERS)}")
 
     elif self._recovery_test_mode == self.RecoveryTestModes.TEST_MAPPER:
       while True:
-        time.sleep(3)
+        time.sleep(4)
         self.kill_worker(id=f"Mapper_{random.randrange(0, NUM_MAPPERS)}")
 
     elif self._recovery_test_mode == self.RecoveryTestModes.TEST_BOTH:
       while True:
-        time.sleep(3)
+        time.sleep(4)
         self.kill_worker(id=f"Mapper_{random.randrange(0, NUM_MAPPERS)}")
         self.kill_worker(id=f"Reducer_{random.randrange(0, NUM_REDUCERS)}")
 

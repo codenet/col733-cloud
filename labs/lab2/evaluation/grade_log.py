@@ -65,7 +65,7 @@ class Logger:
         )
         file_handler.setFormatter(file_formatter)
 
-        # self.logger.addHandler(console_handler)
+        self.logger.addHandler(console_handler)
         self.logger.addHandler(file_handler)
 
     def get_logger(self):
