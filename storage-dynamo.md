@@ -1,5 +1,14 @@
 # Dynamo
 
+- [Dynamo](#dynamo)
+  - [Design Goals](#design-goals)
+    - [CAP Theorem](#cap-theorem)
+    - [Decentralization](#decentralization)
+  - [Read-only decentralized highly available FT key-value storage](#read-only-decentralized-highly-available-ft-key-value-storage)
+    - [Gossip protocol](#gossip-protocol)
+  - [Writing to Dynamo](#writing-to-dynamo)
+  - [Summary](#summary)
+
 ## Design Goals
 
 Amazon's Dynamo is a key-value store that supports small reads and writes.  One
@@ -129,15 +138,15 @@ and their positions on the ring as they join/leave? How/when should it
 steal/give up key ranges?  
 
 GFS used its master for coordination, such as to do load balancing. Another
-option is that every worker heartbeats with every other server to get to know
+option is that every server heartbeats with every other server to get to know
 about dead servers/current load of servers/changes in ring positions. But such
 continuous all-to-all communication causes too much network traffic.
 
 We observe that having a stale view of the ring is ok. Let us say W5 does not
 know that a key `k` has moved from [W1, W2, W3] to [W4, W1, W2]. If W5 asks W3
-for `k`, W3 can forward the request to W4. To exchange information, each server
-randomly chooses 1-3 servers every 1 second and *gossips* with it. During a
-gossip, servers exchange what they know about everyone else. Therefore, any
+for `k`, W3 can forward the request to W4. Further, to exchange updates, each
+server randomly chooses 1-3 servers every 1 second and *gossips* with it. During
+a gossip, servers exchange what they know about everyone else. Therefore, any
 update is known to everyone else in O(log N) gossip rounds.
 
 But how to gossip? Let us say W1 gets to know from W4 that W2 is handling A-B
@@ -153,3 +162,80 @@ has and requests updates for servers (like for W1, W4) it is not updated on.  W1
 responds with the latest information as per W2's request.
 
 <img width=350 src="assets/figs/dynamo-gossip.png">
+
+## Writing to Dynamo
+
+Dynamo administrators can set `N`: number of replicas for each key, and `W`:
+number of acknowledgements required for a successful write. Setting `N`=`W`=1,
+means dynamo serves just as a cache where we do not care about losing our writes
+when servers go down. A typical setup sets `N`=3 and `W`=2.
+
+Unlike GFS and CRAQ, any replica can coordinate a write for high availability!
+There is no primary/head to coordinate the write! For example, both of the
+following writes to `k1` are accepted (`W`=2)!
+
+<img width=200 src="assets/figs/dynamo-inconsistent.png">
+
+Furthermore, if the server coordinating the writes is unable to send the writes
+to the replicas, it skips over them and sends the writes to the next server(s)
+in the token ring! As long as the coordinator can receive `W` acknowledgements,
+writes are returned as successful. This is again done for high availability. 
+
+<img width=300 src="assets/figs/dynamo-hinted-handoff.png">
+
+Dynamo calls the next server that accepted the write as *hinted* replicas. It
+gives back the writes to the real replicas after network heals.
+
+Now that we accepted all kinds of writes, what happens when we read? Similar to
+`W`, Dynamo administrator can set `R` (typically set to 2). Reads are again
+coordinated by any replica. It collects key values from `R` replicas. But these
+replicas may have different values. We now need to somehow reconcile these two
+values.
+
+This is the same problem that also happens in systems that allow disconnected
+operations. For example, Google Doc and Apple Notes accept writes on offline
+devices which need to be reconciled after network heals. General idea is same as
+in git. Let the state diverge. Merge at some point.
+
+<img width=300 src="assets/figs/dynamo-git.png">
+
+Dynamo similarly maintains a version history using vector clocks. The server,
+that coordinates the write, updates its part of the vector at the time of write.
+Due to writes coordinated by different servers, versions can diverge.
+
+<img width=250 src="assets/figs/dynamo-versions.png">
+
+Dynamo's `get(key)` API returns an opaque `context` containing the version
+vector and a list of objects. The client is suppossed to merge the list of
+returned objects and call `put(key, context, merged object)`. For the example
+above, the `get(key)` will return `context=[Sx2, Sy1, Sz1]; objs=[D3, D4]`.
+Client merges D3 and D4 into D5 and then calls `put(key, context=[Sx2, Sy1, Sz1], D5)`.
+
+This option is called *semantic reconciliation*. Here, client can choose how to
+merge divergent values. An example is that given two shopping carts (represented
+as set of items) for the same user, we can merge them by taking a union. Dynamo
+clients can also request *syntactic reconciliation*. Here, the client code never
+sees two values, Dynamo internally just picks latest write. For example, if we
+are storing user profile information like name and address in Dynamo, for
+username keys, syntactic reconciliation makes more sense.
+
+Dynamo is an *eventually consistent* storage system. After network partitions
+heal and if clients stop writing, different value versions will *eventually* be
+merged. Replicas shall *eventually* have identical values.
+
+## Summary
+Amazon sets a very high bar for itself in designing a storage system that can 
+provide <300ms latency for >99.9% of reads and writes. Dynamo is a successful AP
+system that lived up to its promise in handling critical services like Amazon's
+Shopping Cart. It brings together lots of academic distributed systems ideas
+like anti-entropy, gossip-based updates, token ring based distributed hash
+tables, and eventual consistency. 
+
+In engineering distributed hash table, it realizes the usefulness of having
+fixed range token assignment to reduce random disk reads during transfers. For
+high availability, (1) it builds a completely decentralized design that can
+continue to operate under severe network partitions; (2) it lets any replica
+coordinate reads and writes, i.e, no fixed primary; and (3) it does hinted
+handoffs.
+
+Dynamo inspired Cassandra, Riak, and DynamoDB, still widely used in the industry.
