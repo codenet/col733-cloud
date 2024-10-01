@@ -189,11 +189,11 @@ gives back the writes to the real replicas after network heals.
 Now that we accepted all kinds of writes, what happens when we read? Similar to
 `W`, Dynamo administrator can set `R` (typically set to 2). Reads are again
 coordinated by any replica. It collects key values from `R` replicas. But these
-replicas may have different values. We now need to somehow reconcile these two
+replicas may have different values! We now need to somehow reconcile these two
 values.
 
 This is the same problem that also happens in systems that allow disconnected
-operations. For example, Google Doc and Apple Notes accept writes on offline
+operations. For example, Google Docs and Apple Notes accept writes on offline
 devices which need to be reconciled after network heals. General idea is same as
 in git. Let the state diverge. Merge at some point.
 
@@ -215,13 +215,20 @@ This option is called *semantic reconciliation*. Here, client can choose how to
 merge divergent values. An example is that given two shopping carts (represented
 as set of items) for the same user, we can merge them by taking a union. Dynamo
 clients can also request *syntactic reconciliation*. Here, the client code never
-sees two values, Dynamo internally just picks latest write. For example, if we
+sees two values; Dynamo internally just picks latest write. For example, if we
 are storing user profile information like name and address in Dynamo, for
 username keys, syntactic reconciliation makes more sense.
 
 Dynamo is an *eventually consistent* storage system. After network partitions
 heal and if clients stop writing, different value versions will *eventually* be
 merged. Replicas shall *eventually* have identical values.
+
+Notice that by simply taking a union for the semantic reconciliation of shopping
+carts, the deletions may actually disappear as shown in the following example!
+Amazon is probably not unhappy with this outcome since the user might now
+buy onion :smirk:.
+
+<img width=300 src="assets/figs/dynamo-deletions.png">
 
 ## Summary
 Amazon sets a very high bar for itself in designing a storage system that can 
@@ -238,4 +245,8 @@ continue to operate under severe network partitions; (2) it lets any replica
 coordinate reads and writes, i.e, no fixed primary; and (3) it does hinted
 handoffs.
 
-Dynamo inspired Cassandra, Riak, and DynamoDB, still widely used in the industry.
+While eventual consistency provides high availability, reading becomes trickier.
+Applications need to be prepared to get multiple values back and do semantic
+reconciliations. Reconciliation approaches like taking a set union of shopping
+carts may show unexpected behaviours to users. Dynamo inspired Cassandra, Riak,
+and DynamoDB, widely used in the industry.
