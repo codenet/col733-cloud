@@ -137,17 +137,19 @@ the server holding the key. How should a server know about all the other servers
 and their positions on the ring as they join/leave? How/when should it
 steal/give up key ranges?  
 
-GFS used its master for coordination, such as to do load balancing. Another
-option is that every server heartbeats with every other server to get to know
-about dead servers/current load of servers/changes in ring positions. But such
+GFS used its master for coordination, such as to do load balancing. One option
+is that every server heartbeats with every other server to get to know about
+dead servers/current load of servers/changes in ring positions. But such
 continuous all-to-all communication causes too much network traffic.
 
 We observe that having a stale view of the ring is ok. Let us say W5 does not
 know that a key `k` has moved from [W1, W2, W3] to [W4, W1, W2]. If W5 asks W3
-for `k`, W3 can forward the request to W4. Further, to exchange updates, each
-server randomly chooses 1-3 servers every 1 second and *gossips* with it. During
-a gossip, servers exchange what they know about everyone else. Therefore, any
-update is known to everyone else in O(log N) gossip rounds.
+for `k`, W3 can forward the request to W4. 
+
+To exchange updates, each server randomly chooses 1-3 servers every 1 second and
+*gossips* with it. During a gossip, servers exchange what they know about
+everyone else. Therefore, any update is known to everyone else in O(log N)
+gossip rounds.
 
 But how to gossip? Let us say W1 gets to know from W4 that W2 is handling A-B
 key range and from W3 that W2 is handling A-C range. Who should W1 believe?  The
@@ -157,9 +159,9 @@ information on W2.
 The following shows a gossip exchange between W1 and W2. Each server maintains
 key range, current load, and the version of its information for every other
 server. W1 first sends the versions of information it has for everyone. If W2 is
-more updated for some servers (like for W3), it sends the later information it
-has and requests updates for servers (like for W1, W4) it is not updated on.  W1
-responds with the latest information as per W2's request.
+more updated for some servers (like for W3), it sends this information and
+requests updates for servers (like for W1, W4) it is not updated on.  W1
+responds with the information as per W2's request.
 
 <img width=350 src="assets/figs/dynamo-gossip.png">
 
