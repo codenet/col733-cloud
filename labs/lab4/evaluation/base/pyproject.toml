@@ -1,0 +1,59 @@
+[project]
+name = "bayou"
+version = "0.1.0"
+description = "Implementation of Bayou System"
+authors = [
+    {name = "Satyam Jay", email = "anz238224@iitd.ac.in"},
+]
+requires-python = ">=3.12"
+
+readme = "README.md"
+license = {text = "MIT"}
+
+dependencies = [
+    "loguru>=0.7.2",
+    "sortedcontainers",
+		"mypy"
+]
+
+[build-system]
+# A list of packages that are needed to build your package:
+requires = ["setuptools"]  # REQUIRED if [build-system] table is used
+# The name of the Python object that frontends will use to perform the build:
+build-backend = "setuptools.build_meta"  # If not defined, then legacy behavior can happen.
+
+[tool.ruff.lint]
+pydocstyle.convention = "google"
+
+[tool.mypy]
+strict = true
+
+[project.urls]
+
+# The following would provide a command line executable called `sample`
+# which executes the function `main` from this package when invoked.
+[project.scripts]
+
+
+[tool.setuptools.packages.find]
+where = ["."]  # list of folders that contain the packages (["."] by default)
+include = ["core*", "bayou*"]  # package names should match these glob patterns (["*"] by default)
+exclude = []  # exclude packages matching these glob patterns (empty by default)
+namespaces = false  # to disable scanning PEP 420 namespaces (true by default)
+
+[tool.black]
+line-length = 80  
+target-version = ['py312']  # Set to the lowest Python version your project supports
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | build
+  | dist
+)/
+'''
