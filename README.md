@@ -43,4 +43,8 @@ linearizability, CRAQ read throughput improvements over chain replication, chain
 replication can replicate state machines.
 3. [Dynamo](./storage-dynamo.md): CAP theorem, decentralized storage design,
 consistent hashing, gossip protocol using vector clocks, sloppy quorums with
-hinted replicas, eventual consistency, version reconciliations.
+hinted replicas, version reconciliations.
+4. [Bayou/CRDT](./storage-ec.md): State-based CRDTs: monotonic operations on a 
+semilattice; Operations-based CRDTs: commutative operations; Bayou for handling
+conflicting writes by putting them in a replicated log; anti-entropy; eventual
+consistency.
