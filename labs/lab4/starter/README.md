@@ -97,18 +97,19 @@ make test_client         # End-to-End testing from client to server
 ## Deliverables
 1. Methods that are to be implemented are marked as #TODO. Just implementing those methods is enough to pass this lab.
 Feel free to create new helper methods to be used in those methods.
-You can find those using `grep -rni --include="*.py" "TODO" ./bayou`
+You can find the required TODOs using `grep -rni --include="*.py" "TODO" ./bayou`
 2. Restrict all your changes to `app.py`, `storage.py`, and `server.py`.
 3. Zip your submission using `bash create_submission <entry_num>`.
 4. Run the evaluation script provided to be sure that the evaluation script is compatible with your submission:-
    1. cd `evaluation`
    2. Run `python evaluate.py <path_to_submission_zip>`
-   3. Check scores in `scores/<entry_num>.csv`
+   3. Check scores in `scores/<entry_num>.csv`.
+   4. Note that the tests are not exhaustive, more hidden tests will be added during evaluation.
 5. Sumbit on moodle.
    
 Recommended way to complete the assignment:-
 1. Make all the tests in `test_storage` pass.
 2. Make all the tests in `test_client` pass.
-3. Note that the tests are not exhaustive and sucessfully passing them doesn't guarantee correctness, they merely act as
+3. Note that the tests provided by us are not exhaustive and sucessfully passing them doesn't guarantee correctness, they merely act as
 sanity checks. Keep in mind that your system must provide eventual consistency in any scenario it finds itself in.
 So writing good quality tests is very crucial.
