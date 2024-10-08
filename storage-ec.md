@@ -63,10 +63,10 @@ upper bound.  Examples:
 
 ### Operations-based CRDT (Commutative replicated data types)
 
-If all the operations are *commutative*, then it doesn't matter, in which order
-they are applied. In the following example, replica `S1` first inserts `a`, then
-inserts `b` whereas replica `S2` first inserts `b`, then inserts `a`. Because 
-insertions are commutative, both replicas reach the same final state.
+If all operations are *commutative*, then the order in which they are
+applied doesn't matter. In the following example, replica `S1` first inserts
+`a`, then inserts `b` whereas replica `S2` first inserts `b`, then inserts `a`.
+Because insertions are commutative, both replicas reach the same final state.
 
 <img width=300 src="assets/figs/crdt-ops.png">
 
@@ -75,13 +75,13 @@ If you have small states like Amazon's shopping carts, it makes sense to
 exchange states. But if you have large states like full-fledged databases, it
 makes more sense to exchange just the operations.
 
-However, CRDTs require strict properties over allowed operations. The most
-general way (without discussing the types of operations) to achieve convergence
-is to build *replicated state machines*. As discussed in [Chain
+CRDTs require strict properties over allowed operations. The most general way
+(without discussing the types of operations) to achieve convergence is to build
+*replicated state machines*. As discussed in [Chain
 replication](./storage-craq.md#summary), if all replicas can play the same log
 of actions in the same *order* on a deterministic state machine, we can
 replicate the state machine. Bayou takes the same idea to build a replicated
-state machine using a replicated log.
+state machine using a replicated log in presence of network partitions.
 
 ## Bayou goals and ideas
 In Bayou (1995), intermittent connectedness of mobile phones and laptops is the
@@ -97,9 +97,9 @@ again apply `-b` to reach identical state as the first replica.
 
 ### How to order operations?
 How shall we decide the global order, i.e, how does each replica know `+b`
-should be applied *before* `-b`? Bayou applies a *timestamp* to each operation.
-Unlike vector timestamps, these operation timestamps are *totally ordered*. A
-timestamp has $TS=\{id: server, t: clocktime\}$. 
+should be applied *before* `-b`? Bayou applies a *timestamp* $TS=\{id: server,
+t: clocktime\}$ to each operation.  Unlike vector timestamps, these operation
+timestamps are *totally ordered*.
 
 $TS1 < TS2$ if $TS1.t < TS2.t$ or if $TS1.t == TS2.t$ then $TS1.id < TS2.id$.
 Therefore, `+b@S1:10` needs to be applied before `-b@S2:20`.
@@ -125,15 +125,15 @@ is committed. However, we may see more writes from S1 in times 10-20, thereby
 requiring rollback of `op2`. Therefore, `op2` is only tentative. This works.
 
 But unfortunately, any crashed/partitioned server can prevent commits.  For
-example, in our log, we know S1 has moved to time 1000, S2 to 999, but we only
-have log entries from S3 till time 3. We cannot consider any writes in time
-3-1000 committed since we may receive older writes from S3!
+example, in our log, we know S1 has moved to time 1000 but we only have log
+entries from S2 till time 3. We cannot consider any writes in time 3-1000
+committed since we may receive older writes from S2!
 
 In Bayou, the common global order of writes is decided by the *primary* replica.
 This works for the use cases they have in mind. For example, the lecture hall 
 coordinator can be made primary, and all faculty laptops trying to book lecture
 rooms are secondary. As long as a faculty laptop can connect to the lecture hall
-coordinator, they will be able to commit. In the previous design, *all* faculty
+coordinator, it will be able to commit. In the previous design, *all* faculty
 laptops need to be up to get a lecture room.
 
 Primary has no tentative writes; it commits as soon as it learns about a log
@@ -166,7 +166,7 @@ ahead of `c` and tentative log entries that are ahead of `f`. Upon receiving
 these log entries, the server rolls back its tentative logs, plays forward
 received committed log entries, deletes already committed log entries from its 
 tentative log, merges received tentative log entries with its tentative logs,
-and plays forward tentative log entries. It updates `c`, `f`, committed state
+and plays forward tentative log entries. It updates `c`, `f`, committed state,
 and tentative state while playing forward the logs.
 
 The following shows several anti-entropy exchanges between three servers:
@@ -196,12 +196,13 @@ Commutativity can be encoded directly into the data type (CRDTs) that only
 exposes methods that are commutative. Programmers can interact with these data
 types and not worry about merging, commutativity, etc.
 
-Bayou can handle operations that do not commute. It makes clients aware of
-tentative states that may be rolled back. Bayou has a strong primary responsible
-for committing. If writes stop coming and after a few rounds of anti-entropy,
-replicas shall *eventually* come to the same state. Bayou also implements
-*replicated state machines* like Chain Replication: each replica plays the *same
-log* in the *same order* on a *deterministic state machine*.
+Bayou can handle conflicting operations, i.e, operations that do not commute. It
+makes clients aware of tentative states that may be rolled back. Bayou has a
+strong primary responsible for committing. If new writes stop coming, after a
+few rounds of anti-entropy, replicas shall *eventually* come to the same state.
+Bayou also implements *replicated state machines* like Chain Replication: each
+replica plays the *same log* in the *same order* on a *deterministic state
+machine*.
 
 The paper has many other details: 
 * maintenance of undo logs to undo tentative writes;
