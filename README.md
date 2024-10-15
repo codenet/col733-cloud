@@ -48,3 +48,5 @@ hinted replicas, version reconciliations.
 semilattice; Operations-based CRDTs: commutative operations; Bayou for handling
 conflicting writes by putting them in a replicated log; anti-entropy; eventual
 consistency.
+5. [Raft](./storage-raft.md): Raft's safety and liveness properties, idea of
+majority, leader election, consensus, FLP impossibility. 

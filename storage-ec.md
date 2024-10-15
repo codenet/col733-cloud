@@ -1,5 +1,17 @@
 # Bayou/CRDT
 
+- [Bayou/CRDT](#bayoucrdt)
+  - [Conflict-free replicated data types (CRDTs)](#conflict-free-replicated-data-types-crdts)
+    - [State-based CRDT (Convergent replicated data types)](#state-based-crdt-convergent-replicated-data-types)
+    - [Operations-based CRDT (Commutative replicated data types)](#operations-based-crdt-commutative-replicated-data-types)
+  - [Bayou goals and ideas](#bayou-goals-and-ideas)
+    - [How to order operations?](#how-to-order-operations)
+    - [How to commit?](#how-to-commit)
+  - [Bayou implementation](#bayou-implementation)
+    - [Anti-entropy](#anti-entropy)
+    - [Invariants](#invariants)
+- [Summary](#summary)
+
 CP systems (consistent-under-partition) like [CRAQ](./storage-craq.md) reject
 writes during network partitions. AP systems (available-under-partition) like
 [Dynamo](./storage-dynamo.md) accept writes on replicas even under network
@@ -12,7 +24,7 @@ The simplest way to achieve eventual consistency is to implement
 last-writer-wins (LWW), where every replica takes the state which was written
 last. LWW makes sense for some use cases, but it is basically a euphemism for
 everyone-except-last-writer-loses, i.e, it can lose a lot of writes. Imagine
-three offline Google docs users editting (different parts of) the same document
+three offline Google docs users editting different parts of the same document
 in a flight. After landing, all edits of two users are lost. We would like to
 *automatically* reconcile diverged replica states such that we do not lose
 writes.
@@ -26,8 +38,8 @@ After reconciliation, we may end up with S1 having `x=2` and S2 having `x=1`.
 If the state and the operations allowed on state follow certain properties, then
 we can get really good convergence guarantees. This state + ops can be exposed
 to the programmer as special "replicated data types" where the programmer need
-not explicitly do any reconciliation; the data type itself knows how to
-reconcile itself.
+not explicitly do any reconciliation; the data type knows how to reconcile
+itself.
 
 We have two options to reconcile the states of diverged replicas:
 1. State exchange: here each replica sends its state to the other replica; and
