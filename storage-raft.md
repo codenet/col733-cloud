@@ -1,8 +1,17 @@
 # Raft
+- [Raft](#raft)
+	- [Raft setup](#raft-setup)
+	- [Electing a primary](#electing-a-primary)
+	- [How to commit?](#how-to-commit)
+	- [Leader replacement](#leader-replacement)
+	- [What to do about diverging logs?](#what-to-do-about-diverging-logs)
+	- [Subtletly](#subtletly)
+	- [State and persistence](#state-and-persistence)
+- [Summary](#summary)
+
 [CR/CRAQ](./storage-craq.md) depended on an external FT system to manage the
 chain configuration. How is this external system made FT? Does it need yet
 another FT system? :-o
-
 
 ## Raft setup
 Raft is a *self-sufficient* system that does not depend on any other system for
