@@ -52,3 +52,6 @@ consistency.
 election safety, leader completeness property; liveness properties: majority
 within bounded delay implies progress; automated failover via leader election:
 idea of majority, consensus, FLP impossibility. 
+6. [Zookeeper](./storage-zookeeper.md): Improving read throughput of Raft-like
+consensus system by relaxing consistency, Zookeeper API: znodes, ephemeral
+znodes, watches; usecases: configuration management, rendezvous, locks.
