@@ -2,7 +2,7 @@
 
 - [Zookeeper](#zookeeper)
   - [Relaxed consistency](#relaxed-consistency)
-  - [Implementation in terms of Raft](#implementation-in-terms-of-raft)
+  - [Zookeeper implementation in terms of Raft](#zookeeper-implementation-in-terms-of-raft)
   - [Zookeeper APIs and usecases](#zookeeper-apis-and-usecases)
   - [Distributed locking](#distributed-locking)
   - [Ephemeral znodes, watches, and failovers](#ephemeral-znodes-watches-and-failovers)
@@ -23,7 +23,8 @@ fast as the fastest `f+1` servers.
 Can we skip putting reads in the logs as reads do not modify the state machine?
 Replicating entries in the log is a *heavy* operation requiring persistence and
 consensus. Skipping putting reads into the log will help performance since
-typical workloads tend to be read-heavy. 
+typical workloads tend to be read-heavy. Following shows the read/write
+operations done by a Yahoo's crawler service (Figure 2 of the paper).
 
 <img width=200 src="assets/figs/zk-rw.png">
 
@@ -41,15 +42,15 @@ renewing its lease via building majority quorum in every heartbeat. New leader
 cannot be elected until the lease expires: any given server does not vote until
 the lease extension it allowed to the old leader has expired. Therefore, the
 above situation cannot happen. Old leader safely services local reads until
-lease timeout. New leader cannot apply the problematic Wx1 within the lease
-timeout.  Therefore, we *can* service reads without replicating reads in the
-log!
+lease timeout. New leader cannot apply the problematic Wx1 above within the
+lease timeout.  Therefore, we *can* service reads without replicating reads in
+the log!
 
 Can we further improve read throughput by sending reads to followers? Ideally,
 Nx servers should give Nx throughput. Zookeeper does this by relaxing
 consistency. Stale reads shown above are allowed! A useless storage system shows
-all reads as initial values (say 0). Zookeeper places some restrictions on how
-stale can reads be:
+all reads as initial values (say 0). Zookeeper places restrictions on how stale
+can reads be:
 
 1. Writes are linearizable, i.e, they follow a total order. Reads are
 *monotonic*. In the below history, if a client has read `y=4`, then it must read
@@ -64,10 +65,13 @@ previous writes become *visible*.
 
    <img width=250 src="assets/figs/zk-fifo.png">
 
-## Implementation in terms of Raft
+Zookeeper uses another consensus protocol called Zab, but we can see how it
+can work on top of Raft.
 
-Now, clients are talking to the closest server. Writes are forwarded to the
-leader as they have to go through the log for replicated state machine, i.e,
+## Zookeeper implementation in terms of Raft
+
+In Zookeeper, clients are talking to the closest server. Writes are forwarded to
+the leader as they have to go through the log for replicated state machine, i.e,
 build consensus. Reads are served locally by the server without forming a
 consensus. Let us say a client C4 is connected to a follower S3 doing Wx1
 followed by Rx. C4 must read back Rx1 if there is no other Wx from other
@@ -78,12 +82,12 @@ clients.
 When should S3 service the read? It cannot allow the read *as soon as* it sees
 ok for Wx1. S1 may have formed majority with S2; S3 may not have applied Wx1 in
 its local state machine and may therefore read an old value of x. S3 should
-service the read after it has *committed* Wx1.
+service the read after it has *applied* Wx1.
 
 How to maintain the consistency guarantee across failovers? Let us say C4 sent
 the write to Wx1 and got back ok => S1 and S3 have committed Wx1. Before it
 sends Rx, S3 crashes. So client sends Rx to S2. When should S2 service this
-read? S2 can only service it after it has also committed Wx1.
+read? S2 can only service it after it has also *applied* Wx1.
 
 In Zookeeper, each read request and each write response contains `commitIndex`
 (that they call zxid). Reads can be serviced only if `lastApplied` is greater
@@ -108,7 +112,7 @@ network chit chat. Writes are as fast as the fastest `f+1` servers.
 
 <img width=300 src="assets/figs/zk-throughput.png">
 
-Performance improvement is welcome. But is this storage system useful? How?
+Read performance improvement is welcome. But is this storage system useful? How?
 
 ## Zookeeper APIs and usecases
 
@@ -121,8 +125,8 @@ full path in each request; there are no open/close/chdir APIs.
 * create(path, data, flags)
 
 The most interesting flag is EPHEMERAL. It means auto-delete this path if client
-session is disconnected. We will see later how it helps us realize distributed
-locks.
+session is disconnected. We will see later how it helps us realize group
+membership, distributed locks, etc.
 
 Just like CRAQ, each znode has a version number that is incremented at every
 write to the znode. This allows us to implement test-and-set: perform this
@@ -134,8 +138,8 @@ operation iff the version of znode is xyz.
 Clients can "watch" changes to a path; Zookeeper notifies the client upon a
 change. This turns out to be a powerful pattern in decoupling writers from
 readers. Writers need not send separate messages to readers for updating their
-configuration; they just need to write. Readers will get notified by Zookeeper
-about the change.
+configuration; they just write to Zookeeper. Zookeeper will notify readers about
+the change.
 
 * exists(path, watch)
 * getData(path, watch)
@@ -143,8 +147,9 @@ about the change.
 
 Configuration management: An administrator can write a new configuration (such 
 as who is GFS master, what is the chain layout in chain replication) to a znode
-like `/gfs/config`. Other servers can get notified whenever this configuration
-changes. The admin need not tell each server *individually* about this change.
+like `/gfs/config`. Other servers can watch this znode and get notified whenever
+configuration changes. The admin need not tell each server *individually* about
+this change.
 
 Rendezvous: When data center reboots, workers like GFS chunkservers may boot up
 *before* the master. Master can create an ephemeral `/gfs/config` znode that
@@ -155,10 +160,10 @@ notification from `/gfs/config` that master is ready.
 
 What if master needs to share many separate details or make many changes to
 `/gfs/config`? Master can create a `/gfs/ready` file after it is done making all
-the changes to `/gfs/config`. Chunkservers can get watch `/gfs/ready`. Upon 
+the changes to `/gfs/config`. Chunkservers can watch `/gfs/ready`. Upon 
 receiving a notification from `/gfs/ready`, they can read `/gfs/config`. Due to 
-monotonic reads, they will definitely see (at least) the latest `/gfs/config`
-written before `/gfs/ready`. 
+Zookeeper's *monotonic reads*, they will definitely see (at least) the latest
+`/gfs/config` written before `/gfs/ready`. 
 
 Note that if `/gfs/config` was changed again, then they may see a later
 `/gfs/config/`. getData also returns a version number to let clients discover
@@ -168,9 +173,9 @@ ready notification.
 
 Group membership: Chunkservers can create ephemeral child znodes `/gfs/cs/1`,
 `/gfs/cs/2`, etc. with their IP and port information. A Sequential flag in
-create API ensures that a znode gets the next id. Any administrator (maybe
+create API ensures that a znode gets the next ID. Any administrator (maybe
 including master) can easily get to know the chunkservers by just doing
-`getChild(/gfs/cs`). They can set a watch on `getChildren(/gfs/cs)` to get
+`getChildren(/gfs/cs`). They can set a watch on `getChildren(/gfs/cs)` to get
 notified about chunkservers joining/leaving.
 
 ## Distributed locking
@@ -183,7 +188,7 @@ safety and liveness properties:
 acquirers eventually release the lock.
 
 Since machines can crash at any point of time, a crash must be treated as a
-*release*. Otherwise, if a machine crashes with the lock, the system halts:
+*release*. Otherwise, if a machine crashes with the lock, the system may halt:
 everyone blocks on acquire forever. 
 
 In Zookeeper, clients just create an ephemeral znode at the time of acquire. To
@@ -223,11 +228,11 @@ Client 1 takes the lock, reads, gets partitioned from Zookeeper. Client 2 is
 able to take the lock, reads, writes. Client 1 writes to the file overwriting
 client 2 contents!
 
-Basically, to appease our liveness property of the lock, we broke the safety
-property! Clients cannot assume mutual exclusion in distributed locking and the
-system therefore needs to be prepared for this situation!
-
 <img width=400 src="assets/figs/zk-lock-issue.png">
+
+By treating crashes as lock release to bring liveness, we broke the safety
+property of the locks! Clients therefore cannot assume mutual exclusion in
+distributed locking and the system needs to be prepared for this situation!
 
 To handle the above scenario, the storage system needs to play a more active
 role. When client 1 got the lock, it got the lowest ID from Zookeeper (say 33).
@@ -251,14 +256,20 @@ deleted if we did not learn about alive client beyond ephemeral znode timeout.
 What happens to the watched requests if the session server dies? Zookeeper
 client library remembers all the watch requests and the version number of znode
 when it was watched. Every write to znode increases its version number. When the
-client connects to a new server, it sends it all the watch requests. The new
-server immediately sends back notifications for the watch requests whose version
-numbers are now older than the version numbers of the znode.
+client connects to a new server, it sends all the watch requests to the new
+server. The new server immediately sends back notifications for the watch
+requests whose version numbers are now older than the version numbers of the
+znode.
 
 # Summary 
 Zookeeper is a very widely used storage system for doing coordination. It 
 relaxes linearizability and allows stale reads to improve read throughput.
-Watches, ephemeral, sequential znodes form powerful APIs for different types of
-coordination. Distributed locking can be implemented with Zookeeper but
-programmers need extreme care using distributed locks, since they do not provide
-the regular safety guarantees we are accustomed to.
+Watches help decoupling writers from readers; writers just write to Zookeeper,
+readers are notified by Zookeeper. Due to monotonic reads, when a client gets
+notified, it can confidently read other znodes too without worrying about stale
+reads.
+
+Ephemeral, sequential znodes are powerful for implementing group membership and
+distributed locks without the herd effect. Distributed locking can be
+implemented with Zookeeper but programmers need extreme care using such locks,
+since they do not provide the regular safety guarantees we are accustomed to.
