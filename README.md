@@ -57,3 +57,6 @@ consensus system by allowing stale reads, Zookeeper API: znodes, ephemeral and
 sequential znodes, watches; usecases: configuration management, rendezvous,
 group membership, distributed locking; distributed locks: herd effect, using
 fencing tokens.
+7. [Spanner](./storage-spanner.md): Serializability, strict serializability,
+optimistic, pessimistic, multi-version concurrency control, two phase commits,
+snapshot isolation, commit/start timestamps.
