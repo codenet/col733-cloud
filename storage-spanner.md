@@ -31,11 +31,11 @@ our bank. Isolation is broken if T2 executes between T1's `put_x(x+10)` and
 
 To get isolation, what we want is *serializabilty*. Observed effect of
 transaction executions can be rearranged in a serial order: T1 before T2 or T2
-before T1.  For the example above, in both rearrangements, x=90, y=110, and 200
+before T1.  For the example above, in both rearrangements, x=110, y=90, and 200
 is printed.
 
 Note that serializability is different from linearizability. Linearizability
-only talks about operations on a single object whereas serializability is about
+only talks about operations on a *single* object whereas serializability is about
 transactions: multiple operations on multiple objects.
 
 <img width=300 src="assets/figs/spanner-linear-serial.png">
@@ -43,8 +43,8 @@ transactions: multiple operations on multiple objects.
 Serializability does not say anything about real-time order. For example, no
 matter when T2 is run, let us say if it just reads initial values of `x` and
 `y`, we can still arrange transactions into a serial order. *Strict
-serializability* additionally enforces *real-time order*: if T2 started after T1
-committed, only T1 before T2 is strictly serializable.
+serializability* additionally enforces *real-time order*: if T2 *started* after
+T1 *committed*, only T1 before T2 is strictly serializable.
 
 If a system can realize strict serializability, it can easily realize
 linearizability: make all transactions do just one operation (read or write) on
@@ -63,8 +63,8 @@ machine; e.g. x and y bank accounts can be sharded on two different machines.
 OCC assumes most transactions do not conflict with each other. Transactions
 setup watch for different variables. If any variable changes before transaction
 could commit, the transaction is aborted. For example in the following, if T1
-gets to exec first, T2 is aborted. If T2 gets to exec first, T1 is *not* aborted
-since T2 did not change x, y.
+gets to exec first, T2 is aborted and retried. If T2 gets to exec first, T1 is
+*not* aborted since T2 did not change x, y.
 
 | T1: transfer | T2: audit   |
 | ------------ | ----------- |
@@ -109,7 +109,7 @@ Now let us see how to do PCC when x and y are distributed on multiple machines.
 
 #### Two-phase commit
 
-In two-phase commits, RW transaction is executed in two phases. Transaction
+In two-phase commits, RW transactions are executed in two phases. Transaction
 coordinator (TC) asks all shards to return all relevant values and *prepare* to write
 by taking the write locks. The values are sent back to the client.  The client
 sends back the new values to write. TC asks all shards to commit the values and
@@ -129,8 +129,7 @@ What if B crashes *after* it already sent YES? TC may have sent commit to A!
 TC will keep retrying commit(T1) forever with B.  When B reboots, it must
 *remember* that it was in the middle of transaction T1, and must re-acquire
 wlock(y). It must not say YES to another conflicting transaction! Therefore,
-shards must do write-ahead-logging of prepare(YES) messages before replying to
-TC. 
+shards must do write-ahead-logging of prepare(T1, YES) before replying to TC. 
 
 What if TC crashes? If participants replied YES, they are blocked. They must
 keep waiting for commit/abort! After restart, TC must commit/abort all pending
@@ -143,11 +142,11 @@ transactions. Therefore, TC does write-ahead logging of
 Why is it ok to not log prepare responses from shards? TC can unilaterally abort
 if it has not committed/aborted a transaction. 
 
-Spanner does two-phase commits of RW transactions. However, each shard is a
-Paxos group (like a Raft group). Instead of doing write-ahead logging to
-disk, to handle restarts, the write-ahead logging is done in the replicated log
-so that majority within a given shard knows which transactions have we prepared
-for.
+Spanner does two-phase commits of RW transactions. However, each shard and TC is
+a Paxos group (like a Raft group). Instead of doing write-ahead logging to disk,
+to handle restarts, the write-ahead logging is done in the replicated log (and
+the disk) so that majority within a given shard knows which transactions have we
+prepared for.
 
 ## Snapshot reads
 
@@ -186,7 +185,29 @@ interfere with what an earlier RO transaction is reading! This allows lock-free
 reads in RO transactions without giving up strict serializability.
 
 For example in the following, T1 is committed at time 2, T2 starts at time 5 and
-reads the values written by T1. If T0 was ongoing, it does not affect the
-execution of T2.
+reads the values written by T1. If T0 was ongoing, it does not affect the reads
+of T2.
 
 <img width=350 src="assets/figs/spanner-mvcc.png">
+
+However, there is a problem. Commit timestamp is decided by TC. What if the
+shard has not yet written the value at committed timestmap. In the following
+example, `y@2=120` is written *after* `Ry@5` request came to the shard Y.  If
+shard Y responds with the latest value of y (y@0 = 100), we broke strict
+serializability!
+
+<img width=350 src="assets/figs/spanner-late-commit.png">
+
+Y must not serve y@0 at Ry@5. Once a shard has taken a wlock, it may be
+committed with a future timestamp at any time in the future. Shards must not
+service reads at a future time until they release the wlock via commit/abort.
+This is managed by *safe time*: only reads *before* safe time can be serviced,
+reads *after* safe time are *blocked*.
+
+In the following example, shards X and Y pause their safe time to time 1 when
+they take the wlock. When shard X sees the commit and unlocks, it can advance
+its safe time to the clock time and service Rx@5. When shard Y gets Ry@5, its
+safe time is still stuck at 1. Therefore, this request is blocked! Finally, when
+shard Y commits, it advances its safe time and services Ry@5 with y@2=120.
+
+<img width=350 src="assets/figs/spanner-safe-time.png">
