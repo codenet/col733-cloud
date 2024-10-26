@@ -58,5 +58,7 @@ sequential znodes, watches; usecases: configuration management, rendezvous,
 group membership, distributed locking; distributed locks: herd effect, using
 fencing tokens.
 7. [Spanner](./storage-spanner.md): Serializability, strict serializability,
-optimistic, pessimistic, multi-version concurrency control, two phase commits,
-snapshot isolation, commit/start timestamps.
+optimistic concurrency control (CC), pessimistic CC, multi-version CC,
+wound-wait deadlock avoidance, two phase commits, lock-free snapshot reads,
+commit/start timestamps, safe time, clock skew, commit wait, true time API,
+time masters.

@@ -1,5 +1,15 @@
 # Spanner
 
+- [Spanner](#spanner)
+	- [Strict serializability / external consistency](#strict-serializability--external-consistency)
+		- [Optimistic concurrency control](#optimistic-concurrency-control)
+		- [Pessimistic concurrency control](#pessimistic-concurrency-control)
+			- [Two-phase commit](#two-phase-commit)
+	- [Snapshot reads](#snapshot-reads)
+		- [Multi-version concurrency control](#multi-version-concurrency-control)
+	- [Troubles due to clock skew](#troubles-due-to-clock-skew)
+- [Summary](#summary)
+
 ## Strict serializability / external consistency
 In Zookeeper, Raft, CR/CRAQ, we have been assuming that the entire-key value
 store fits within the memory/storage of a single machine. In Dynamo, we sharded
@@ -176,13 +186,15 @@ and `put_y` of T1 thereby getting wrong total account balance!
 
 ### Multi-version concurrency control
 
-The idea to support snapshot isolation is to keep multiple *versions* of each
-value. Each RW transaction is given a *commit timestamp* and all the values
+The idea to support snapshot reads is to keep multiple *timestamped versions* of
+each value. Each RW transaction is given a *commit timestamp* and all the values
 written by it are written at this timestamp version. Each RO transaction is
-given a *start timestamp*, it reads the latest value at this timestamp. Now even
-though, there may be other ongoing RW transactions, their writes do not
+given a *start timestamp*, it reads latest values at this timestamp. 
+
+Even though there may be other ongoing RW transactions, their writes do not
 interfere with what an earlier RO transaction is reading! This allows lock-free
-reads in RO transactions without giving up strict serializability.
+reads in RO transactions without giving up strict serializability: timestamps
+create the serial order among transactions.
 
 For example in the following, T1 is committed at time 2, T2 starts at time 5 and
 reads the values written by T1. If T0 was ongoing, it does not affect the reads
@@ -191,7 +203,7 @@ of T2.
 <img width=350 src="assets/figs/spanner-mvcc.png">
 
 However, there is a problem. Commit timestamp is decided by TC. What if the
-shard has not yet written the value at committed timestmap. In the following
+shard has not yet written the value at committed timestamp. In the following
 example, `y@2=120` is written *after* `Ry@5` request came to the shard Y.  If
 shard Y responds with the latest value of y (y@0 = 100), we broke strict
 serializability!
@@ -201,8 +213,9 @@ serializability!
 Y must not serve y@0 at Ry@5. Once a shard has taken a wlock, it may be
 committed with a future timestamp at any time in the future. Shards must not
 service reads at a future time until they release the wlock via commit/abort.
-This is managed by *safe time*: only reads *before* safe time can be serviced,
-reads *after* safe time are *blocked*.
+Notice that this is a problem only because we are doing *lock-free* reads. This
+is managed by *safe time*: only reads *before* safe time can be serviced, reads
+*after* safe time are *blocked*.
 
 In the following example, shards X and Y pause their safe time to time 1 when
 they take the wlock. When shard X sees the commit and unlocks, it can advance
@@ -211,3 +224,97 @@ safe time is still stuck at 1. Therefore, this request is blocked! Finally, when
 shard Y commits, it advances its safe time and services Ry@5 with y@2=120.
 
 <img width=350 src="assets/figs/spanner-safe-time.png">
+
+## Troubles due to clock skew
+
+However, servers' local clocks may not reflect "true" real-time with each other.
+
+Let us say, an RO transaction T3, reading x and y, starts at true real-time 2.
+Further, say two RW transactions, T1 writing x, and T2 writing y, commit at true
+real-time 1. Since T3 starts *after* RW transactions T1 and T2, it must read
+both the writes: from T1 and T2. However, let us say T1's TC clock was running
+*ahead* and it sets the commit timestamp as 3 (the true real-time is only 1).
+Therefore, T3 will read the new value from T2 but *not* from T1, thereby
+breaking strict serializability!
+
+<img width=250 src="assets/figs/spanner-skew-prob.png">
+
+The *big idea* in spanner is to *expose* the clock uncertainty interval to
+servers. Spanner guarantees that the true real-time falls within this
+uncertainty interval.
+
+<img width=200 src="assets/figs/spanner-uncertainty.png">
+
+Google servers have access to a `TrueTime` API:
+* TrueTime.earliest: earliest in the uncertainty interval (0 in above example)
+* TrueTime.latest: latest in the uncertainty interval (4 in above example)
+
+Google measured worst-case clock drifts in their servers as 200us per second.
+They put *time masters* in each data center equipped with atomic clocks/GPS
+receivers which do not have such clock drifts. Each server in the data center
+gets the time from time servers every 30 seconds. After every 30 seconds, the
+uncertainty interval shrinks to RTT (~1ms), and then it again grows at the rate
+of 200us per second to ~7ms until the next sync with time master.
+
+<img width=250 src="assets/figs/spanner-sawtooth.png">
+
+Equipped with TrueTime API, the commit timestamps of RW transactions and the
+start timestamps of RO transactions can be set to TrueTime.latest. This
+guarantees that by the time commit is applied/read happens the true real time is
+indeed that much (since true real time is guaranteed to be *before*
+TrueTime.latest).
+
+When a RW transactions comes to TC, TC starts the prepare phase of two-phase
+commit. When everyone is prepared, TC picks TrueTime.latest as the commit
+timestamp. It then *waits* until its TrueTime.earliest is beyond the commit
+timestamp. This is what the paper calls *commit-wait*. After commit wait, TC is
+sure that the true real-time has surpassed commit timestamp. It responds to the
+client that the transaction was committed at the commit timestamp and starts the
+second phase of the two-phase commit asking everyone to commit at the commit
+timestamp. Other shards run the second phase of two-phase commit normally: apply
+the writes, release all the locks, and advance safe time.
+
+# Summary
+Spanner is a geo-distributed sharded database supporting atomic cross-shard
+transactions with strict serializability while allowing snapshot reads, i.e,
+lock-free read-only transactions. Read-write transactions are done atomically
+using two-phase commits (pessimistic concurrency control).  Snapshot reads are
+done by putting a monotonic timestamp version on every update (multi-version
+concurrency control). Network delays between deciding the commit timestamp and
+writing the committed value is handled by blocking lock-free reads at timestamps
+after *safe time*. 
+
+Clock skew across different servers is handled by exposing clock uncertainty to
+each server using the TrueTime API. Each RW transaction is given TrueTime.latest
+timestamp; transaction coordinator does a *commit wait* to ensure real time has
+indeed passed commit timestamp before replying to client/actually committing.
+Commit-wait duration directly depends on time uncertainty interval. Time
+uncertainty is controlled using per-datacenter time masters equipped with atomic
+clocks and GPS receivers that do not drift as such. 
+
+Two-phase commits can block for a long time if transaction coordinator crashes
+after the participants have said YES for a prepare. Spanner makes all the
+shards, including transaction coordinators for RW transactions, replicated state
+machines on top of Paxos (consensus protocol like [Raft](./storage-raft.md)).
+All the cross shard communication is driven by Paxos leaders. If Paxos leader
+crashes, another follower becomes the leader and continues the transaction. This
+largely relieves the blocked two-phase commit due to crashed transaction
+coordinator.
+
+Spanner actually allows lock-free reads from Paxos followers as well to improve
+read-throughput. Followers also maintain safe time. Follower safe time can never
+go beyond leader's safe time. Follower's safe time is similar, in principle, to
+blocking reads in [zookeeper](./storage-zookeeper.md) until the server has
+caught up on the request's zxid.
+
+The paper talks about many other interesting details such as how to ensure
+uncorrelated failures in time masters, what to do about clock skew at the time
+of leader replacement since leaders also given [leases](./storage-zookeeper.md),
+how leases help in keeping timestamp of writes in replicated log monotonic, how
+two-phase commits are completed after a new Paxos leader is elected, how data is
+sharded across Paxos groups, how can we provide an earlier timestamp than
+TrueTime.latest in some cases, etc.
+
+Spanner has a popular open-source incarnation called CockroachDB that provides
+the same guarantees (strict serializability and snapshot reads) without
+requiring time masters! They use *hybrid logical clocks*.
