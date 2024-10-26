@@ -32,7 +32,7 @@ def evaluate_test():
         for subtest in test:
             test_names.add(str(subtest._testMethodName))
 
-    # print(test_names)
+    print(test_names)
 
     old_stdout = sys.stdout
     sys.stdout = StringIO()
@@ -44,19 +44,19 @@ def evaluate_test():
         str(test[0]._testMethodName)
         for test in result.failures
     ])
-    # print(failure_tests)
+    print(failure_tests)
 
     error_tests = set([
         str(test[0]._testMethodName)
         for test in result.errors
     ])
-    # print(error_tests)
+    print(error_tests)
 
     skipped_tests = set([
         str(test[0]._testMethodName)
         for test in result.skipped
     ])
-    # print(skipped_tests)
+    print(skipped_tests)
 
     passing_tests = test_names - failure_tests - error_tests - skipped_tests
 
@@ -104,5 +104,8 @@ def evaluate(sub_zip: Path):
 
 
 if __name__ == "__main__":
-    assert Path(sys.argv[1]).exists()
-    evaluate(Path(sys.argv[1]))
+    submissions = Path('/home/baadalvm/lab4_sub')
+    for submission in submissions.glob('*.zip'):
+        evaluate(submission)
+
+    # evaluate(Path('/home/baadalvm/lab4_sub/solution.zip'))  
