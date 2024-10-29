@@ -62,3 +62,12 @@ optimistic concurrency control (CC), pessimistic CC, multi-version CC,
 wound-wait deadlock avoidance, two phase commits, lock-free snapshot reads,
 commit/start timestamps, safe time, clock skew, commit wait, true time API,
 time masters.
+
+### Virtualization
+1. [CPU virtualization](./virt-cpu.md): Operational advantages of
+virtualization: overprovisioning, strong isolation, reduced trusted computing
+base, snapshot/restore, live migration; OS background: privilege levels, limited
+direct execution, trap handling, system calls; trap-and-emulate hypervisors: 
+Popek-Goldberg theorem, problematic x86 instructions, full virtualization with
+dynamic binary translation, paravirtualization, hardware-assisted
+virtualization.
