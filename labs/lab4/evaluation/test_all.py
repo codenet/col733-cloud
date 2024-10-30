@@ -74,4 +74,3 @@ class TestStringAppenderClient(TestCase):
 
 
 # More tests to be added during evaluation
-
