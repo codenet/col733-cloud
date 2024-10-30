@@ -13,7 +13,8 @@ license = {text = "MIT"}
 dependencies = [
     "loguru>=0.7.2",
     "sortedcontainers",
-		"mypy"
+    "mypy",
+    "psutil"
 ]
 
 [build-system]

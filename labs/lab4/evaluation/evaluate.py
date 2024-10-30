@@ -44,21 +44,23 @@ def evaluate_test():
         str(test[0]._testMethodName)
         for test in result.failures
     ])
-    print(failure_tests)
 
     error_tests = set([
         str(test[0]._testMethodName)
         for test in result.errors
     ])
-    print(error_tests)
 
     skipped_tests = set([
         str(test[0]._testMethodName)
         for test in result.skipped
     ])
-    print(skipped_tests)
 
     passing_tests = test_names - failure_tests - error_tests - skipped_tests
+
+    print("PASSING: ", passing_tests)
+    print("FAILURE: ", failure_tests)
+    print("ERROR: ", error_tests)
+    print("SKIPPED: ", skipped_tests)
 
     return passing_tests
 
@@ -104,8 +106,9 @@ def evaluate(sub_zip: Path):
 
 
 if __name__ == "__main__":
-    submissions = Path('/home/baadalvm/lab4_sub')
-    for submission in submissions.glob('*.zip'):
-        evaluate(submission)
+    if len(sys.argv) != 2:
+        print("Usage: python evaluate.py <submission_file>")
+        sys.exit(1)
 
-    # evaluate(Path('/home/baadalvm/lab4_sub/solution.zip'))  
+    submission_file = sys.argv[1]
+    evaluate(Path(submission_file))

@@ -52,6 +52,6 @@ for column in ordered_columns[1:]:  # Skip 'entry_num'
     combined_df[column] = combined_df[column].astype(int)
 
 # Save the combined DataFrame to a single CSV file
-combined_df["Total"] = combined_df["test1"] + combined_df["test2"] + combined_df["test3"]
+combined_df["Total"] = combined_df["test1"] + combined_df["test2"] + combined_df["test3"] + combined_df["test4"]
 combined_df.to_csv("lab4-scores.csv", index=False)
 print("Pivoted CSV file saved as 'lab4-scores.csv'")
