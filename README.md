@@ -69,5 +69,9 @@ virtualization: overprovisioning, strong isolation, reduced trusted computing
 base, snapshot/restore, live migration; OS background: privilege levels, limited
 direct execution, trap handling, system calls; trap-and-emulate hypervisors: 
 Popek-Goldberg theorem, problematic x86 instructions, full virtualization with
-dynamic binary translation, paravirtualization, hardware-assisted
-virtualization.
+dynamic binary translation (VMWare), paravirtualization (Xen), hardware-assisted
+virtualization (KVM).
+2. [Memory virtualization](./virt-mem.md): OS background: virtual address space,
+virtual-to-physical address translation using paging hardware, page table entries,
+page faults; two-level page tables, extended page tables, memory ballooning,
+kernel samepage merging.
