@@ -75,3 +75,8 @@ virtualization (KVM).
 virtual-to-physical address translation using paging hardware, page table entries,
 page faults; two-level page tables, extended page tables, memory ballooning,
 kernel samepage merging.
+3. [IO virtualization](./virt-io.md) : OS background: port IO, memory mapped IO,
+direct memory access, ring buffers; IO emulation: trap on PIO and MMIO,
+unnecessary VM exits since physical devices were not designed with
+virtualization goal; IO paravirtualization: reduce VM exits; HW assisted IO
+virtualization: SRIOV, IOMMU.
