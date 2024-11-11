@@ -50,7 +50,7 @@ point to the process' page table. Due to the hardware enforced address
 translation, a process can only access its own *virtual address space*, i.e,
 whatever addresses are mapped into the process' page table. Page table pages are
 of course not in the process' virtual address space. Changing CR3 is a privileged
-instruction requires CPU to be running in ring 0.
+instruction which requires CPU to be running in ring 0.
 
 However, now every load/store requires 3 memory accesses: 2 in page table + 1
 actual access. Hardware therefore caches virtual page number to physical page
@@ -90,11 +90,11 @@ unused pages to disk to improve memory utilization.
 ## Two-dimensional page tables
 
 Hypervisor wants to play the same trick on the OS that the OS played on its
-processes. OS relied on hardware to respect the page table and do the address
-translation. However, the hardware was only capable of working with one page
-table at a given time. But, here we are interested in two-dimensional address
+processes. OS relied on hardware to do the address translation using page
+tables. However, the hardware was only capable of working with one page table at
+a given time. But, here we are interested in *two-dimensional* address
 translations: from guest virtual address (GVA) to guest physical address (GPA)
-to host physical address (HPA). There was an ingenious approach of using *shadow 
+to host physical address (HPA). There was an ingenious approach of using *shadow
 page tables*. We will instead just look at the modern hardware support for 
 two-dimensional page tables.
 
@@ -155,25 +155,28 @@ out some pages to disk to give to the driver. Using memory balloon, VMM is able
 to trigger requirement of pages, OS can decide which pages to swap out.
 
 ### Same page merging
-Multiple guest VMs may have identical pages, for example, the OS code is
+Multiple guest VMs may have identical pages, for example, the OS code may be
 identical. VMMs do content-based page sharing. They randomly scan a page and
 note down its hash. If the hashes of two pages match then VMM matches the page
 contents to avoid hash collisions. If the page matches fully, the page is marked
-as read-only (for doing copy-on-write) and is backed up by the same physical
-page. This could save 7-32% of physical memory, depending on the Guest VM OS.
+as read-only (for doing copy-on-write) in the GPA->HPA page table and is backed
+up by the same physical page. Of course, this is completely transparent to the 
+Guest VMs. Content-based page sharing could save 7-32% of physical memory,
+depending on the Guest VM OS.
 
-Interesting trivia: Content based merging was described in a paper by VMWare in
-2002. Linux implemented it using a similar hash-table based implementation in
-Nov'08 but got a VMWare patent infringement notice. Linux reimplemented it using
-a red-black tree implementation in Apr'09 to avoid patent infringement. :-)
+Interesting trivia: Content-based page sharing was described in a paper by
+VMWare in 2002. Linux implemented it using a similar hash-table based
+implementation in Nov'08 which would infringe a [VMWare
+patent](https://lwn.net/Articles/330589/). Linux reimplemented it using a
+red-black tree implementation in Apr'09 to avoid patent infringement. :-)
 
 # Summary
 Hypervisors fool the OS in the same manner as OS fools processes into believing 
-that they *own* the memory. Modern hardware supports 2D translations using
-extended page tables. 2D translations was done over 1D page table hardware using
-shadow paging (not covered here). Shadow paging remains relevant if two-level
-page tables are not available, such as on embedded devices, or if we want to do
-nested hypervisors: Hardware -> VMM -> VMM -> OS, where we have to do 3D
-translations on a 2D page table hardware support. OS memory management services
-have to be redesigned in the VMM. VMM lets the OS decide which pages to swap by
-installing a memory balloon driver.
+that they *own* the memory. Modern hardware supports 2D address translations
+using extended page tables. 2D translations was done over 1D page table hardware
+using shadow paging (not covered here). Shadow paging remains relevant if
+two-level page tables are not available, such as on embedded devices, or if we
+want to do nested hypervisors: Hardware -> VMM -> VMM -> OS, where we have to do
+3D translations on a 2D page table hardware support. For manage memory, VMM lets
+the OS decide which pages to swap by installing a memory balloon driver, and
+does content-based page sharing to deduplicate pages.
